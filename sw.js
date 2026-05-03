@@ -8,12 +8,12 @@ const CACHE_NAME = "arco-gaia-v1";
 
 // Archivos que se guardan en caché al instalar
 const ARCHIVOS_CACHE = [
-  "./index.html",
-  "./manifest.json",
-  "./icon-192x192.png",
-  "./icon-512x512.png",
-  "./apple-touch-icon.png",
-  "./favicon-32x32.png"
+  "/aplicacion-planilla-javier/index.html",
+  "/aplicacion-planilla-javier/manifest.json",
+  "/aplicacion-planilla-javier/icon-192x192.png",
+  "/aplicacion-planilla-javier/icon-512x512.png",
+  "/aplicacion-planilla-javier/apple-touch-icon.png",
+  "/aplicacion-planilla-javier/favicon-32x32.png"
 ];
 
 // Instalación: guardar todos los archivos en caché
@@ -54,7 +54,7 @@ self.addEventListener("fetch", (event) => {
       // Si no está en caché, intentar red
       return fetch(event.request).catch(() => {
         // Sin red y sin caché: devolver el HTML principal como fallback
-        return caches.match("./index.html");
+        return caches.match("/aplicacion-planilla-javier/index.html");
       });
     })
   );
