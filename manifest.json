@@ -1,0 +1,35 @@
+{
+  "name": "Planilla Tiro con Arco - Gaia",
+  "short_name": "Arco Gaia",
+  "description": "Planilla de puntuación para recorridos de campo. Club Arqueros Gaia.",
+  "start_url": "./Aplicacion_Javier_tiro_con_arco.html",
+  "display": "standalone",
+  "background_color": "#1a3a2a",
+  "theme_color": "#1a3a2a",
+  "orientation": "portrait",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "./favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "./apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "./icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
