@@ -8,7 +8,7 @@ const CACHE_NAME = "arco-gaia-v1";
 
 // Archivos que se guardan en caché al instalar
 const ARCHIVOS_CACHE = [
-  "./Aplicacion_Javier_tiro_con_arco.html",
+  "./index.html",
   "./manifest.json",
   "./icon-192x192.png",
   "./icon-512x512.png",
@@ -54,7 +54,7 @@ self.addEventListener("fetch", (event) => {
       // Si no está en caché, intentar red
       return fetch(event.request).catch(() => {
         // Sin red y sin caché: devolver el HTML principal como fallback
-        return caches.match("./Aplicacion_Javier_tiro_con_arco.html");
+        return caches.match("./index.html");
       });
     })
   );
