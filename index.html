@@ -312,7 +312,7 @@
       <option value="">Seleccionar...</option>
       <option value="Armuña">Armuña</option>
       <option value="El Horcajo">El Horcajo</option>
-      <option value="El Horcajo 28">El Horcajo 28</option>
+      <option value="El Horcajo Maxi">El Horcajo Maxi</option>
       <option value="Otro">Otro</option>
     </select>
     <div id="otroLugarDiv" style="display:none;">
@@ -467,7 +467,7 @@
       startDiana = data.startDiana || 1;
       currentDiana = data.currentDiana || startDiana;
       currentArcherIndex = data.currentArcherIndex || 0;
-      maxDianas = data.maxDianas || ((selectedLugar === "El Horcajo 28") ? 28 : 24);
+      maxDianas = data.maxDianas || ((selectedLugar === "El Horcajo Maxi") ? 35 : 24);
       scores = data.scores || Array(maxDianas).fill(null).map(() => []);
       document.getElementById("restoreSessionCard").style.display = "none";
       document.getElementById("dianaCard").style.display = "block";
@@ -514,7 +514,7 @@
         document.getElementById("otroLugarDiv").style.display = "none";
       }
       // Actualizar el desplegable de Patrulla según el campo seleccionado
-      const totalDianas = (val === "El Horcajo 28") ? 28 : 24;
+      const totalDianas = (val === "El Horcajo Maxi") ? 35 : 24;
       const startDianaSelect = document.getElementById("startDiana");
       startDianaSelect.innerHTML = "";
       for (let i = 1; i <= totalDianas; i++) {
@@ -548,7 +548,7 @@
         selectedLugar = lugarValue;
       }
       // Definir el número máximo de dianas según el campo
-      maxDianas = (selectedLugar === "El Horcajo 28") ? 28 : 24;
+      maxDianas = (selectedLugar === "El Horcajo Maxi") ? 35 : 24;
       scores = Array(maxDianas).fill(null).map(() => []);
       const numArqueros = parseInt(document.getElementById("numArqueros").value);
       if (!numArqueros || numArqueros < 1 || numArqueros > 6) { alert("Por favor, selecciona un número válido de arqueros (1 a 6)."); return; }
