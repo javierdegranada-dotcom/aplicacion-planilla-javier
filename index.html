@@ -738,6 +738,7 @@
           csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
         });
         csvContent += "\n";
+        csvContent += añadirEstadisticasCSV(orderP, archerIndex, ",");
       });
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -772,6 +773,7 @@
           csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
         });
         csvContent += "\n";
+        csvContent += añadirEstadisticasCSV(orderPE, archerIndex, ";");
       });
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -806,6 +808,7 @@
         csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
       });
       csvContent += "\n";
+      csvContent += añadirEstadisticasCSV(order, archerIndex, ",");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -838,6 +841,7 @@
         csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
       });
       csvContent += "\n";
+      csvContent += añadirEstadisticasCSV(order, archerIndex, ";");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -846,6 +850,188 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    /* ── Estadísticas CSV ── */
+    function añadirEstadisticasCSV(order, archerIndex, sep) {
+      const st = calcularEstadisticas(order, archerIndex);
+      const vals = [11, 10, 8, 5, 0];
+      const nombres = { 11: 'Anillo (11)', 10: 'Centro (10)', 8: 'Zona 8', 5: 'Zona 5', 0: 'Fallo (0)' };
+      const totalF = st.total1 + st.total2;
+      let out = "";
+      out += `ESTADÍSTICAS${sep}${sep}${sep}${sep}\n`;
+      out += `PUNTUACIÓN TOTAL${sep}${st.total}${sep}${sep}${sep}\n`;
+      out += `${sep}${sep}${sep}${sep}\n`;
+      out += `Primeras flechas${sep}${st.sum1} pts${sep}${st.total > 0 ? ((st.sum1/st.total)*100).toFixed(1)+'%' : '0%'} del total${sep}${sep}\n`;
+      out += `Segundas flechas${sep}${st.sum2} pts${sep}${st.total > 0 ? ((st.sum2/st.total)*100).toFixed(1)+'%' : '0%'} del total${sep}${sep}\n`;
+      const diff = st.sum2 - st.sum1;
+      out += `Diferencia 2ª-1ª${sep}${diff >= 0 ? '+' : ''}${diff} pts${sep}${sep}${sep}\n`;
+      out += `${sep}${sep}${sep}${sep}\n`;
+      out += `Distribución${sep}1ª flecha${sep}2ª flecha${sep}Total${sep}% Total\n`;
+      vals.forEach(v => {
+        const c1 = st.cnt1[v] || 0;
+        const c2 = st.cnt2[v] || 0;
+        const ct = c1 + c2;
+        const pct = totalF > 0 ? ((ct / totalF) * 100).toFixed(1) + '%' : '0%';
+        out += `${nombres[v]}${sep}${c1}x${sep}${c2}x${sep}${ct}x${sep}${pct}\n`;
+      });
+      out += `${sep}${sep}${sep}${sep}\n`;
+      return out;
+    }
+
+    /* ── Estadísticas PDF ── */
+    function calcularEstadisticas(order, archerIndex) {
+      const vals = [0, 5, 8, 10, 11];
+      const cnt1 = {}, cnt2 = {};
+      vals.forEach(v => { cnt1[v] = 0; cnt2[v] = 0; });
+      let sum1 = 0, sum2 = 0, total1 = 0, total2 = 0;
+      order.forEach(d => {
+        const p = scores[d - 1][archerIndex] || { flecha1: null, flecha2: null };
+        const f1 = p.flecha1; const f2 = p.flecha2;
+        if (f1 !== null) { sum1 += f1; total1++; if (cnt1[f1] !== undefined) cnt1[f1]++; }
+        if (f2 !== null) { sum2 += f2; total2++; if (cnt2[f2] !== undefined) cnt2[f2]++; }
+      });
+      return { sum1, sum2, total: sum1 + sum2, total1, total2, cnt1, cnt2 };
+    }
+
+    function dibujarEstadisticasPDF(doc, archerIndex, order) {
+      const st = calcularEstadisticas(order, archerIndex);
+      const vals = [11, 10, 8, 5, 0];
+      const colores = {
+        11: [220, 160, 230],
+        10: [120, 195, 245],
+         8: [255, 195, 100],
+         5: [140, 215, 145],
+         0: [240, 120, 110]
+      };
+      const nombres = { 11: 'Anillo (11)', 10: 'Centro (10)', 8: 'Zona 8', 5: 'Zona 5', 0: 'Fallo (0)' };
+
+      let y = doc.lastAutoTable.finalY + 14;
+      const pgH = doc.internal.pageSize.getHeight();
+      if (y + 95 > pgH) { doc.addPage(); y = 20; }
+
+      // ── Título sección ──
+      doc.setFillColor(40, 60, 45);
+      doc.roundedRect(14, y, 182, 9, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10); doc.setFont(undefined, 'bold');
+      doc.text('ESTADÍSTICAS DEL RECORRIDO', 105, y + 6.2, { align: 'center' });
+      y += 14;
+
+      // ── Total general destacado ──
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(14, y, 182, 14, 3, 3, 'F');
+      doc.setDrawColor(40, 60, 45); doc.setLineWidth(0.5);
+      doc.roundedRect(14, y, 182, 14, 3, 3, 'S');
+      doc.setTextColor(40, 60, 45);
+      doc.setFontSize(15); doc.setFont(undefined, 'bold');
+      doc.text(`PUNTUACIÓN TOTAL: ${st.total}`, 105, y + 9.5, { align: 'center' });
+      y += 20;
+
+      // ── Bloque 1ªs y 2ªs flechas ──
+      const pct1 = st.total > 0 ? ((st.sum1 / st.total) * 100).toFixed(1) : '0.0';
+      const pct2 = st.total > 0 ? ((st.sum2 / st.total) * 100).toFixed(1) : '0.0';
+
+      // Caja 1ªs flechas
+      doc.setFillColor(230, 240, 255);
+      doc.roundedRect(14, y, 88, 18, 2, 2, 'F');
+      doc.setTextColor(30, 60, 120);
+      doc.setFontSize(8); doc.setFont(undefined, 'normal');
+      doc.text('PRIMERAS FLECHAS', 58, y + 5.5, { align: 'center' });
+      doc.setFontSize(14); doc.setFont(undefined, 'bold');
+      doc.text(`${st.sum1} pts`, 58, y + 13.5, { align: 'center' });
+      doc.setFontSize(7); doc.setFont(undefined, 'normal');
+      doc.text(`${pct1}% del total`, 58, y + 18, { align: 'center' });
+
+      // Caja 2ªs flechas
+      doc.setFillColor(230, 255, 235);
+      doc.roundedRect(108, y, 88, 18, 2, 2, 'F');
+      doc.setTextColor(30, 100, 50);
+      doc.setFontSize(8); doc.setFont(undefined, 'normal');
+      doc.text('SEGUNDAS FLECHAS', 152, y + 5.5, { align: 'center' });
+      doc.setFontSize(14); doc.setFont(undefined, 'bold');
+      doc.text(`${st.sum2} pts`, 152, y + 13.5, { align: 'center' });
+      doc.setFontSize(7); doc.setFont(undefined, 'normal');
+      doc.text(`${pct2}% del total`, 152, y + 18, { align: 'center' });
+      y += 26;
+
+      // ── Separador ──
+      doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3);
+      doc.line(14, y, 196, y); y += 6;
+
+      // ── Cabecera tabla de distribución ──
+      doc.setFillColor(40, 60, 45);
+      doc.rect(14, y, 182, 7, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7); doc.setFont(undefined, 'bold');
+      doc.text('Puntuación', 36, y + 4.8, { align: 'center' });
+      doc.text('1ª flecha', 80, y + 4.8, { align: 'center' });
+      doc.text('2ª flecha', 124, y + 4.8, { align: 'center' });
+      doc.text('Total', 168, y + 4.8, { align: 'center' });
+      y += 7;
+
+      // ── Filas por puntuación ──
+      vals.forEach((v, idx) => {
+        const c1 = st.cnt1[v] || 0;
+        const c2 = st.cnt2[v] || 0;
+        const ct = c1 + c2;
+        const totalF = st.total1 + st.total2;
+        const pctT = totalF > 0 ? ((ct / totalF) * 100).toFixed(1) : '0.0';
+        const pct1v = st.total1 > 0 ? ((c1 / st.total1) * 100).toFixed(1) : '0.0';
+        const pct2v = st.total2 > 0 ? ((c2 / st.total2) * 100).toFixed(1) : '0.0';
+
+        const rowH = 10;
+        const bg = idx % 2 === 0 ? [252, 252, 252] : [245, 245, 245];
+        doc.setFillColor(...bg); doc.rect(14, y, 182, rowH, 'F');
+
+        // Color badge puntuación
+        doc.setFillColor(...colores[v]);
+        doc.roundedRect(16, y + 1.5, 38, 7, 1.5, 1.5, 'F');
+        doc.setTextColor(40, 40, 40);
+        doc.setFontSize(8); doc.setFont(undefined, 'bold');
+        doc.text(nombres[v], 35, y + 6.8, { align: 'center' });
+
+        // 1ª flecha
+        doc.setFont(undefined, 'normal'); doc.setFontSize(7.5);
+        doc.setTextColor(60, 60, 60);
+        doc.text(`${c1}x  (${pct1v}%)`, 80, y + 6.5, { align: 'center' });
+
+        // Barra 1ª flecha
+        const barW1 = Math.round((c1 / Math.max(st.total1, 1)) * 28);
+        doc.setFillColor(...colores[v]);
+        if (barW1 > 0) doc.roundedRect(56, y + 3, barW1, 3.5, 1, 1, 'F');
+
+        // 2ª flecha
+        doc.text(`${c2}x  (${pct2v}%)`, 124, y + 6.5, { align: 'center' });
+
+        // Barra 2ª flecha
+        const barW2 = Math.round((c2 / Math.max(st.total2, 1)) * 28);
+        doc.setFillColor(...colores[v]);
+        if (barW2 > 0) doc.roundedRect(100, y + 3, barW2, 3.5, 1, 1, 'F');
+
+        // Total
+        doc.setFont(undefined, 'bold'); doc.setFontSize(8);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`${ct}x  (${pctT}%)`, 168, y + 6.5, { align: 'center' });
+
+        // Barra total
+        const barWT = Math.round((ct / Math.max(totalF, 1)) * 28);
+        doc.setFillColor(...colores[v]);
+        if (barWT > 0) doc.roundedRect(144, y + 3, barWT, 3.5, 1, 1, 'F');
+
+        y += rowH;
+      });
+
+      // ── Pie: diferencia 1ª vs 2ª ──
+      y += 4;
+      if (y + 10 > pgH) { doc.addPage(); y = 20; }
+      const diff = st.sum2 - st.sum1;
+      const diffTxt = diff >= 0
+        ? `Las 2ªs flechas aportaron +${diff} pts más que las 1ªs`
+        : `Las 1ªs flechas aportaron +${Math.abs(diff)} pts más que las 2ªs`;
+      doc.setFontSize(7.5); doc.setFont(undefined, 'italic');
+      doc.setTextColor(100, 100, 100);
+      doc.text(diffTxt, 105, y, { align: 'center' });
     }
     /* (C) Descarga de PDF (individual y patrulla) se mantiene igual que antes */
     function downloadSingleArcherPDF(archerIndex) {
@@ -919,6 +1105,7 @@
           }
         }
       });
+      dibujarEstadisticasPDF(doc, archerIndex, order);
       const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.pdf`;
       doc.save(filename);
     }
@@ -995,6 +1182,7 @@
             }
           }
         });
+        dibujarEstadisticasPDF(doc, i, order);
       }
       const filename = `${placeStr}-${dateStr}-${patrullaStr}-Patrulla.pdf`;
       doc.save(filename);
@@ -1034,155 +1222,6 @@
     }
     function cancelDownloadFormat() {
       document.getElementById("downloadFormatModal").style.display = "none";
-    }
-    /* Descarga de CSV Individual */
-    function downloadSingleArcherCSV_Google(archerIndex) {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const placeStr = selectedLugar || "SinLugar";
-      const patrullaStr = "Patrulla-" + startDiana;
-      const archerName = participants[archerIndex] || "Unknown";
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.csv`;
-      let csvContent = "";
-      csvContent += `Archer,**${archerName}**\n`;
-      csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
-      let totalSum = 0;
-      let order = [];
-      for (let i = startDiana; i <= maxDianas; i++) order.push(i);
-      for (let i = 1; i < startDiana; i++) order.push(i);
-      order = filtrarPuestosRealizados(order, archerIndex);
-      order.forEach((d) => {
-        const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
-        const f1 = flechas.flecha1 || 0;
-        const f2 = flechas.flecha2 || 0;
-        const partialSum = f1 + f2;
-        totalSum += partialSum;
-        csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
-      });
-      csvContent += "\n";
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-    function downloadSingleArcherCSV_Excel(archerIndex) {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const placeStr = selectedLugar || "SinLugar";
-      const patrullaStr = "Patrulla-" + startDiana;
-      const archerName = participants[archerIndex] || "Unknown";
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.csv`;
-      let csvContent = "\ufeff"; // BOM para Excel
-      csvContent += `Archer;**${archerName}**\n`;
-      csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
-      let totalSum = 0;
-      let order = [];
-      for (let i = startDiana; i <= maxDianas; i++) order.push(i);
-      for (let i = 1; i < startDiana; i++) order.push(i);
-      order = filtrarPuestosRealizados(order, archerIndex);
-      order.forEach((d) => {
-        const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
-        const f1 = flechas.flecha1 || 0;
-        const f2 = flechas.flecha2 || 0;
-        const partialSum = f1 + f2;
-        totalSum += partialSum;
-        csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
-      });
-      csvContent += "\n";
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-    /* Descarga de CSV Patrulla */
-    function downloadPatrullaCSV_Google() {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const placeStr = selectedLugar || "SinLugar";
-      const patrullaStr = "Patrulla-" + startDiana;
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
-      let csvContent = "";
-      let orderP = [];
-      for (let i = startDiana; i <= maxDianas; i++) orderP.push(i);
-      for (let i = 1; i < startDiana; i++) orderP.push(i);
-      orderP = filtrarPuestosRealizadosPatrulla(orderP);
-      participants.forEach((archer, archerIndex) => {
-        csvContent += `Archer,**${archer}**\n`;
-        csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
-        let totalSum = 0;
-        orderP.forEach((d) => {
-          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
-          const f1 = flechas.flecha1 || 0;
-          const f2 = flechas.flecha2 || 0;
-          const partialSum = f1 + f2;
-          totalSum += partialSum;
-          csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
-        });
-        csvContent += "\n";
-      });
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-    function downloadPatrullaCSV_Excel() {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const placeStr = selectedLugar || "SinLugar";
-      const patrullaStr = "Patrulla-" + startDiana;
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
-      let csvContent = "\ufeff"; // BOM para Excel
-      let orderPE = [];
-      for (let i = startDiana; i <= maxDianas; i++) orderPE.push(i);
-      for (let i = 1; i < startDiana; i++) orderPE.push(i);
-      orderPE = filtrarPuestosRealizadosPatrulla(orderPE);
-      participants.forEach((archer, archerIndex) => {
-        csvContent += `Archer;**${archer}**\n`;
-        csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
-        let totalSum = 0;
-        orderPE.forEach((d) => {
-          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
-          const f1 = flechas.flecha1 || 0;
-          const f2 = flechas.flecha2 || 0;
-          const partialSum = f1 + f2;
-          totalSum += partialSum;
-          csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
-        });
-        csvContent += "\n";
-      });
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-    /* (D) Mostrar Modal de Descarga */
-    function showDownloadCard() {
-      document.getElementById("mainSummaryCard").style.display = "none";
-      document.getElementById("downloadCard").style.display = "block";
-      const downloadButtonsDiv = document.getElementById("downloadButtons");
-      downloadButtonsDiv.innerHTML = "";
-      // Botones para descarga individual
-      participants.forEach((name, i) => {
-        downloadButtonsDiv.innerHTML += `<button class="btn-primario" onclick="selectDownloadFormat(${i})">Descargar solo ${name}</button>`;
-      });
-      // Botón para descarga de toda la patrulla
-      downloadButtonsDiv.innerHTML += `<button class="btn-secundario" onclick="selectDownloadFormatPatrulla()">Descargar toda la patrulla</button>`;
-    }
-    function closeDownloadCard() {
-      document.getElementById("downloadCard").style.display = "none";
-      document.getElementById("mainSummaryCard").style.display = "block";
     }
   </script>
 
