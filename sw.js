@@ -4,7 +4,7 @@
    Estrategia: Cache-first (funciona sin internet)
    ================================================ */
 
-const CACHE_NAME = "arco-gaia-v3";
+const CACHE_NAME = "arco-gaia-v4";
 
 // Archivos que se guardan en caché al instalar
 const ARCHIVOS_CACHE = [
