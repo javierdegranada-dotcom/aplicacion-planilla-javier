@@ -1,61 +1,1239 @@
-/* ================================================
-   Service Worker — Planilla Tiro con Arco Gaia
-   Versión: 1.0
-   Estrategia: Cache-first (funciona sin internet)
-   ================================================ */
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tiro con Arco - Arqueros Gaia (Descargas en otra pantalla)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-const CACHE_NAME = "arco-gaia-v4";
-
-// Archivos que se guardan en caché al instalar
-const ARCHIVOS_CACHE = [
-  "/aplicacion-planilla-javier/index.html",
-  "/aplicacion-planilla-javier/manifest.json",
-  "/aplicacion-planilla-javier/icon-192x192.png",
-  "/aplicacion-planilla-javier/icon-512x512.png",
-  "/aplicacion-planilla-javier/apple-touch-icon.png",
-  "/aplicacion-planilla-javier/favicon-32x32.png"
-];
-
-// Instalación: guardar todos los archivos en caché
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("[SW] Guardando archivos en caché...");
-      return cache.addAll(ARCHIVOS_CACHE);
-    })
-  );
-  self.skipWaiting();
-});
-
-// Activación: limpiar cachés antiguas si hay nueva versión
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => {
-            console.log("[SW] Eliminando caché antigua:", key);
-            return caches.delete(key);
-          })
-      )
-    )
-  );
-  self.clients.claim();
-});
-
-// Fetch: servir desde caché (sin internet)
-self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        return cached; // Servir desde caché
+  <!-- PWA: manifest e iconos -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#1a3a2a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arco Gaia">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+  <style>
+    /* =====================
+       (1) MISMO CSS DE ANTES
+       ===================== */
+    html, body {
+      overscroll-behavior: none;
+      margin: 0; 
+      padding: 0; 
+      text-align: center;
+      background: #f4f4f4;
+      font-family: Arial, sans-serif;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: url("http://files.123inventatuweb.com/acens187443/image/logomsresolucionarquerosgaianegroyblanco.jpg")
+                  center center no-repeat;
+      background-size: cover;
+      opacity: 0.05;
+      z-index: -1;
+      pointer-events: none;
+    }
+    #splashScreen {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: #fff;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #splashScreen img {
+      width: 90vw;
+      max-width: 600px;
+      height: auto;
+      margin-bottom: 20px;
+    }
+    #splashScreen button {
+      padding: 15px 25px;
+      font-size: 1.1em;
+      border: none;
+      border-radius: 5px;
+      background: #2196f3;
+      color: #fff;
+      cursor: pointer;
+    }
+    #splashScreen button:hover {
+      opacity: 0.9;
+    }
+    .card {
+      background: rgba(255,255,255,0.9);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px auto;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      max-width: 400px;
+      position: relative;
+      z-index: 1;
+    }
+    button {
+      padding: 8px 15px;
+      margin: 5px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-primario {
+      background-color: #2196f3; color: #fff;
+    }
+    .btn-primario:hover { background-color: #1976d2; }
+    .btn-secundario {
+      background-color: #4caf50; color: #fff;
+    }
+    .btn-secundario:hover { background-color: #388e3c; }
+    .btn-peligro {
+      background-color: #f44336; color: #fff;
+    }
+    .btn-peligro:hover { background-color: #d32f2f; }
+    .btn-azulClaro {
+      background-color: #64b5f6; color: #fff;
+    }
+    .btn-azulClaro:hover { background-color: #42a5f5; }
+    /* Puntuaciones => 11: violeta, 10: azul, 8: naranja, 5: verde, 0: rojo */
+    .btn-11 { background-color: #9c27b0; color: #fff; }
+    .btn-10 { background-color: #2196f3; color: #fff; }
+    .btn-8  { background-color: #ff9800; color: #fff; }
+    .btn-5  { background-color: #4caf50; color: #fff; }
+    .btn-0  { background-color: #f44336; color: #fff; }
+    select, input {
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+      margin: 5px 0;
+      display: block;
+      width: calc(100% - 40px);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #startCard p, #startCard h1 {
+      font-weight: bold;
+    }
+    .score-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .flecha-container {
+      margin: 10px 0;
+      padding: 10px;
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      background-color: #f9f9f9;
+    }
+    #dianaCard h1 {
+      font-size: 1.2em;
+    }
+    #mainSummaryCard {
+      display: none;
+    }
+    #resume-total {
+      font-size: 1.1em;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    #archerDetailCard {
+      display: none;
+      background: rgba(255,255,255,0.9);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px auto;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      max-width: 400px;
+      position: relative;
+      z-index: 2;
+    }
+    #archerDetailName {
+      margin-bottom: 5px;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    #colorLegend {
+      font-size: 0.8em;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 5px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 3px;
+    }
+    .legend-icon {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      margin-right: 3px;
+    }
+    #archerDetailGrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      text-align: center;
+      font-size: 0.85em;
+    }
+    .diana-cell {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .diana-title {
+      font-weight: bold;
+      margin-bottom: 3px;
+    }
+    .flecha-icons {
+      display: flex;
+      justify-content: center;
+    }
+    .flecha-icon {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      margin: 2px;
+      cursor: pointer;
+    }
+    .score-11 { background-color: #9c27b0; }
+    .score-10 { background-color: #2196f3; }
+    .score-8  { background-color: #ff9800; }
+    .score-5  { background-color: #4caf50; }
+    .score-0  { background-color: #f44336; }
+    .score-null {
+      background-color: #ccc;
+    }
+    #editModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 9999;
+      background-color: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      font-size: 1em;
+    }
+    #editModalContent {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 300px;
+      margin: auto;
+      text-align: center;
+    }
+    #editModal button {
+      margin: 5px;
+    }
+    /* Tarjeta de restaurar sesión anterior */
+    #restoreSessionCard {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    #restoreSessionContent {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 300px;
+      margin: auto;
+      text-align: center;
+    }
+    /* Pantalla créditos */
+    #creditosCard { display: none; }
+    /*
+      (2) NUEVA PANTALLA #downloadCard
+      para descargar SOLO uno o TODOS
+    */
+    #downloadCard { display: none; }
+    /* ===============================
+       Estilos para el Modal de Descarga
+       =============================== */
+    #downloadFormatModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+    #downloadFormatContent {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      min-width: 300px;
+    }
+  </style>
+  <!-- Incluir jsPDF y autoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <!-- Splash -->
+  <div id="splashScreen">
+    <img src="http://files.123inventatuweb.com/acens187443/image/logomsresolucionarquerosgaianegroyblanco.jpg" alt="Logo Arqueros Gaia">
+    <button class="btn-primario" onclick="ocultarSplash()">Pulse para continuar</button>
+  </div>
+  <!-- Restaurar sesión -->
+  <div id="restoreSessionCard">
+    <div id="restoreSessionContent" class="card">
+      <h3>Recuperar Sesión Anterior</h3>
+      <p>Hemos encontrado una sesión guardada. ¿Deseas cargarla?</p>
+      <button class="btn-secundario" onclick="restoreSession()">Recuperar Sesión</button>
+      <button class="btn-peligro" onclick="deleteSession()">Nueva Sesión</button>
+    </div>
+  </div>
+  <!-- Config -->
+  <div class="card" id="startCard" style="display:none;">
+    <h1><strong>Inicio del Recorrido</strong></h1>
+    <p>Selecciona el lugar de la tirada:</p>
+    <select id="selectLugar" onchange="checkLugar()">
+      <option value="">Seleccionar...</option>
+      <option value="Armuña">Armuña</option>
+      <option value="El Horcajo">El Horcajo</option>
+      <option value="El Horcajo Maxi">El Horcajo Maxi</option>
+      <option value="Otro">Otro</option>
+    </select>
+    <div id="otroLugarDiv" style="display:none;">
+      <input type="text" id="otroLugarInput" placeholder="Nombre del lugar...">
+    </div>
+    <p>Selecciona el número de arqueros (máximo 6):</p>
+    <select id="numArqueros" onchange="showParticipantInputs()">
+      <option value="">Seleccionar...</option>
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+    </select>
+    <div id="participants" style="display:none;">
+      <p>Introduce los nombres de los participantes:</p>
+      <div id="participantInputs"></div>
+    </div>
+    <p>Selecciona la <strong>Patrulla</strong> (Puesto inicial):</p>
+    <select id="startDiana">
+      <script>
+        for (let i = 1; i <= 24; i++) { document.write(`<option value="${i}">${i}</option>`); }
+      </script>
+    </select>
+    <button class="btn-secundario" onclick="startRecorrido()">Comenzar</button>
+    <button class="btn-primario" onclick="showCreditos()">Créditos</button>
+  </div>
+  <!-- Créditos -->
+  <div class="card" id="creditosCard" style="display:none;">
+    <h2>Créditos</h2>
+    <p>Este programa ha sido realizado por el arquero del club Gaia, <b>A. Javier Gijón</b>, y se pone a disposición de toda la comunidad de arqueros que consideren que les puede ser útil.</p>
+    <button class="btn-primario" onclick="hideCreditos()">Volver</button>
+  </div>
+  <!-- Pantalla de Puesto (puntuaciones) -->
+  <div class="card" id="dianaCard" style="display:none;">
+    <h1>
+      <strong>Puesto</strong> <span id="currentDiana">1</span> - <strong>Arquero</strong>:
+      <span id="currentArcher">N/A</span>
+    </h1>
+    <div class="flecha-container">
+      <p><strong>Flecha 1:</strong></p>
+      <div id="flecha1Buttons" class="score-buttons">
+        <button class="btn-11" onclick="setScore('flecha1', 11)">11</button>
+        <button class="btn-10" onclick="setScore('flecha1', 10)">10</button>
+        <button class="btn-8"  onclick="setScore('flecha1', 8)">8</button>
+        <button class="btn-5"  onclick="setScore('flecha1', 5)">5</button>
+        <button class="btn-0"  onclick="setScore('flecha1', 0)">0</button>
+      </div>
+    </div>
+    <div class="flecha-container">
+      <p><strong>Flecha 2:</strong></p>
+      <div id="flecha2Buttons" class="score-buttons">
+        <button class="btn-11" onclick="setScore('flecha2', 11)">11</button>
+        <button class="btn-10" onclick="setScore('flecha2', 10)">10</button>
+        <button class="btn-8"  onclick="setScore('flecha2', 8)">8</button>
+        <button class="btn-5"  onclick="setScore('flecha2', 5)">5</button>
+        <button class="btn-0"  onclick="setScore('flecha2', 0)">0</button>
+      </div>
+    </div>
+    <button class="btn-azulClaro" onclick="nextParticipantOrDiana()">Siguiente</button>
+    <button class="btn-peligro" onclick="clearScores()">Borrar Puntuaciones</button>
+  </div>
+  <!-- Resumen Principal -->
+  <div class="card" id="mainSummaryCard">
+    <h2><strong>Resumen</strong></h2>
+    <div id="resume-total"></div>
+    <div id="resume-buttons"></div>
+    <button class="btn-secundario" onclick="showDownloadCard()">Descargas</button>
+  </div>
+  <!-- Pantalla de Descarga -->
+  <div class="card" id="downloadCard">
+    <h2>Descarga de Resultados</h2>
+    <div id="downloadButtons"></div>
+    <button class="btn-peligro" onclick="closeDownloadCard()">Volver</button>
+  </div>
+  <!-- Detalle de un SOLO arquero -->
+  <div id="archerDetailCard">
+    <div id="archerDetailName"></div>
+    <div id="colorLegend">
+      <div class="legend-item"><div class="legend-icon score-11"></div> <span>11</span></div>
+      <div class="legend-item"><div class="legend-icon score-10"></div> <span>10</span></div>
+      <div class="legend-item"><div class="legend-icon score-8"></div> <span>8</span></div>
+      <div class="legend-item"><div class="legend-icon score-5"></div> <span>5</span></div>
+      <div class="legend-item"><div class="legend-icon score-0"></div> <span>0</span></div>
+    </div>
+    <div id="archerDetailGrid"></div>
+    <button class="btn-primario" onclick="closeArcherDetail()">Volver</button>
+  </div>
+  <!-- Modal Editar Flecha -->
+  <div id="editModal">
+    <div id="editModalContent">
+      <h3><strong>Editar Flecha</strong></h3>
+      <p><strong>Puesto</strong> <span id="editDiana"></span> – <strong>Flecha</strong> <span id="editFlechaNum"></span></p>
+      <div>
+        <button onclick="confirmEdit(0)">0</button>
+        <button onclick="confirmEdit(5)">5</button>
+        <button onclick="confirmEdit(8)">8</button>
+        <button onclick="confirmEdit(10)">10</button>
+        <button onclick="confirmEdit(11)">11</button>
+      </div>
+      <button class="btn-peligro" onclick="cancelEdit()">Cancelar</button>
+    </div>
+  </div>
+  <!-- Modal para seleccionar el formato de descarga -->
+  <div id="downloadFormatModal">
+    <div id="downloadFormatContent">
+      <h3>Selecciona el formato de descarga</h3>
+      <select id="downloadFormatSelect">
+        <option value="csv_google">CSV (Google Sheets)</option>
+        <option value="csv_excel">CSV (Excel)</option>
+        <option value="pdf">PDF</option>
+      </select>
+      <br>
+      <button class="btn-primario" onclick="confirmDownloadFormat()">Descargar</button>
+      <button class="btn-peligro" onclick="cancelDownloadFormat()">Cancelar</button>
+    </div>
+  </div>
+  <script>
+    /* ======================
+       (A) Variables y LÓGICA 
+       ====================== */
+    let currentDiana = 1;
+    let maxDianas = 24;
+    let scores = Array(24).fill(null).map(() => []);
+    let startDiana = 1;
+    let participants = [];
+    let currentArcherIndex = 0;
+    let selectedLugar = "";
+    let editingDiana = null;
+    let editingArcherIndex = null;
+    let editingFlecha = null;
+    // Modo de descarga: "individual" o "patrulla"
+    let downloadMode = "individual";
+    let currentDownloadArcherIndex = null;
+    
+    function ocultarSplash() {
+      document.getElementById("splashScreen").style.display = "none";
+      const saved = localStorage.getItem("archerySession");
+      if (saved) {
+        document.getElementById("restoreSessionCard").style.display = "flex";
+      } else {
+        document.getElementById("startCard").style.display = "block";
       }
-      // Si no está en caché, intentar red
-      return fetch(event.request).catch(() => {
-        // Sin red y sin caché: devolver el HTML principal como fallback
-        return caches.match("/aplicacion-planilla-javier/index.html");
+    }
+    function restoreSession() {
+      const saved = localStorage.getItem("archerySession");
+      if (!saved) return;
+      const data = JSON.parse(saved);
+      selectedLugar = data.selectedLugar || "";
+      participants = data.participants || [];
+      startDiana = data.startDiana || 1;
+      currentDiana = data.currentDiana || startDiana;
+      currentArcherIndex = data.currentArcherIndex || 0;
+      maxDianas = data.maxDianas || ((selectedLugar === "El Horcajo Maxi") ? 35 : 24);
+      scores = data.scores || Array(maxDianas).fill(null).map(() => []);
+      document.getElementById("restoreSessionCard").style.display = "none";
+      document.getElementById("dianaCard").style.display = "block";
+      document.getElementById("currentDiana").innerText = currentDiana;
+      if (participants.length > 0) {
+        document.getElementById("currentArcher").innerText = participants[currentArcherIndex];
+      }
+      document.getElementById("mainSummaryCard").style.display = "block";
+      document.getElementById("startCard").style.display = "none";
+      updateSummary();
+    }
+    function deleteSession() {
+      localStorage.removeItem("archerySession");
+      document.getElementById("restoreSessionCard").style.display = "none";
+      document.getElementById("startCard").style.display = "block";
+    }
+    function saveSession() {
+      const data = {
+        selectedLugar,
+        participants,
+        startDiana,
+        currentDiana,
+        currentArcherIndex,
+        maxDianas,
+        scores
+      };
+      localStorage.setItem("archerySession", JSON.stringify(data));
+    }
+    /* Créditos */
+    function showCreditos() {
+      document.getElementById("startCard").style.display = "none";
+      document.getElementById("creditosCard").style.display = "block";
+    }
+    function hideCreditos() {
+      document.getElementById("creditosCard").style.display = "none";
+      document.getElementById("startCard").style.display = "block";
+    }
+    /* Check lugar y arqueros */
+    function checkLugar() {
+      const val = document.getElementById("selectLugar").value;
+      if (val === "Otro") {
+        document.getElementById("otroLugarDiv").style.display = "block";
+      } else {
+        document.getElementById("otroLugarDiv").style.display = "none";
+      }
+      // Actualizar el desplegable de Patrulla según el campo seleccionado
+      const totalDianas = (val === "El Horcajo Maxi") ? 35 : 24;
+      const startDianaSelect = document.getElementById("startDiana");
+      startDianaSelect.innerHTML = "";
+      for (let i = 1; i <= totalDianas; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = i;
+        startDianaSelect.appendChild(opt);
+      }
+    }
+    function showParticipantInputs() {
+      const numArqueros = parseInt(document.getElementById("numArqueros").value);
+      const participantContainer = document.getElementById("participantInputs");
+      participantContainer.innerHTML = "";
+      if (numArqueros > 0) {
+        document.getElementById("participants").style.display = "block";
+        for (let i = 0; i < numArqueros; i++) {
+          participantContainer.innerHTML += `<input type="text" placeholder="Nombre del arquero ${i + 1}" id="archer${i}" required>`;
+        }
+      } else {
+        document.getElementById("participants").style.display = "none";
+      }
+    }
+    function startRecorrido() {
+      const lugarValue = document.getElementById("selectLugar").value;
+      if (!lugarValue) { alert("Por favor, selecciona un lugar."); return; }
+      if (lugarValue === "Otro") {
+        const customPlace = document.getElementById("otroLugarInput").value.trim();
+        if (!customPlace) { alert("Por favor, introduce el nombre del lugar."); return; }
+        selectedLugar = customPlace;
+      } else {
+        selectedLugar = lugarValue;
+      }
+      // Definir el número máximo de dianas según el campo
+      maxDianas = (selectedLugar === "El Horcajo Maxi") ? 35 : 24;
+      scores = Array(maxDianas).fill(null).map(() => []);
+      const numArqueros = parseInt(document.getElementById("numArqueros").value);
+      if (!numArqueros || numArqueros < 1 || numArqueros > 6) { alert("Por favor, selecciona un número válido de arqueros (1 a 6)."); return; }
+      participants = [];
+      for (let i = 0; i < numArqueros; i++) {
+        const name = document.getElementById(`archer${i}`).value.trim();
+        if (!name) { alert("Completa todos los nombres de los arqueros."); return; }
+        participants.push(name);
+      }
+      const selDiana = parseInt(document.getElementById("startDiana").value);
+      if (!selDiana || selDiana < 1 || selDiana > maxDianas) { alert(`Por favor, selecciona un puesto válido (1-${maxDianas}).`); return; }
+      startDiana = selDiana;
+      currentDiana = startDiana;
+      currentArcherIndex = 0;
+      document.getElementById("currentDiana").innerText = currentDiana;
+      document.getElementById("currentArcher").innerText = participants[currentArcherIndex];
+      document.getElementById("startCard").style.display = "none";
+      document.getElementById("dianaCard").style.display = "block";
+      document.getElementById("mainSummaryCard").style.display = "block";
+      saveSession();
+      updateSummary();
+    }
+    /* Puntuaciones */
+    function setScore(flecha, score) {
+      if (!scores[currentDiana - 1][currentArcherIndex]) {
+        scores[currentDiana - 1][currentArcherIndex] = { flecha1: null, flecha2: null };
+      }
+      scores[currentDiana - 1][currentArcherIndex][flecha] = score;
+      const buttons = document.getElementById(`${flecha}Buttons`).querySelectorAll("button");
+      buttons.forEach(btn => btn.style.display = "none");
+      document.querySelector(`#${flecha}Buttons .btn-${score}`).style.display = "inline-block";
+      updateSummary();
+      saveSession();
+    }
+    function clearScores() {
+      if (scores[currentDiana - 1][currentArcherIndex]) {
+        scores[currentDiana - 1][currentArcherIndex] = { flecha1: null, flecha2: null };
+      }
+      const buttons1 = document.getElementById("flecha1Buttons").querySelectorAll("button");
+      buttons1.forEach(btn => btn.style.display = "inline-block");
+      const buttons2 = document.getElementById("flecha2Buttons").querySelectorAll("button");
+      buttons2.forEach(btn => btn.style.display = "inline-block");
+      updateSummary();
+      saveSession();
+    }
+    function nextParticipantOrDiana() {
+      const currentScores = scores[currentDiana - 1][currentArcherIndex];
+      if (!currentScores || currentScores.flecha1 === null || currentScores.flecha2 === null) {
+        alert("Por favor, selecciona puntuaciones para ambas flechas del arquero actual.");
+        return;
+      }
+      currentArcherIndex++;
+      if (currentArcherIndex >= participants.length) {
+        currentArcherIndex = 0;
+        currentDiana = (currentDiana === maxDianas) ? 1 : (currentDiana + 1);
+        if (currentDiana === startDiana) {
+          alert("Has completado todas las Patrullas.");
+          document.getElementById("dianaCard").style.display = "none";
+          saveSession();
+          return;
+        }
+        document.getElementById("currentDiana").innerText = currentDiana;
+      }
+      document.getElementById("currentArcher").innerText = participants[currentArcherIndex];
+      const buttons1 = document.getElementById("flecha1Buttons").querySelectorAll("button");
+      buttons1.forEach(btn => btn.style.display = "inline-block");
+      const buttons2 = document.getElementById("flecha2Buttons").querySelectorAll("button");
+      buttons2.forEach(btn => btn.style.display = "inline-block");
+      updateSummary();
+      saveSession();
+    }
+    /* Resumen principal */
+    function updateSummary() {
+      const archerTotals = participants.map(() => 0);
+      participants.forEach((_, aIndex) => {
+        scores.forEach((puesto) => {
+          if (puesto[aIndex]) {
+            const f1 = puesto[aIndex].flecha1 || 0;
+            const f2 = puesto[aIndex].flecha2 || 0;
+            archerTotals[aIndex] += (f1 + f2);
+          }
+        });
       });
-    })
-  );
-});
+      const totalElem = document.getElementById("resume-total");
+      totalElem.innerHTML = "<strong>Totales por arquero:</strong>";
+      const resumeButtonsDiv = document.getElementById("resume-buttons");
+      resumeButtonsDiv.innerHTML = "";
+      participants.forEach((name, i) => {
+        totalElem.innerHTML += `<p>${name}: <b>${archerTotals[i]}</b> puntos</p>`;
+        resumeButtonsDiv.innerHTML += `<button class="btn-primario" onclick="showArcherDetail(${i})">Resumen de ${name}</button>`;
+      });
+    }
+    function showArcherDetail(archerIndex) {
+      document.getElementById("dianaCard").style.display = "none";
+      document.getElementById("mainSummaryCard").style.display = "none";
+      const detailName = document.getElementById("archerDetailName");
+      detailName.innerHTML = "Resumen de " + participants[archerIndex];
+      let order = [];
+      for (let i = startDiana; i <= maxDianas; i++) order.push(i);
+      for (let i = 1; i < startDiana; i++) order.push(i);
+      const detailGrid = document.getElementById("archerDetailGrid");
+      detailGrid.innerHTML = "";
+      order.forEach((d) => {
+        const pScores = scores[d - 1][archerIndex] || { flecha1: null, flecha2: null };
+        const f1 = pScores.flecha1 ?? 0;
+        const f2 = pScores.flecha2 ?? 0;
+        const icon1Class = (pScores.flecha1 !== null) ? `score-${f1}` : 'score-null';
+        const icon2Class = (pScores.flecha2 !== null) ? `score-${f2}` : 'score-null';
+        const parcial = f1 + f2;
+        detailGrid.innerHTML += `
+          <div class="diana-cell">
+            <div class="diana-title"><strong>Puesto</strong> ${d} <small style="font-size: 0.7em;">(${parcial})</small></div>
+            <div class="flecha-icons">
+              <div class="flecha-icon ${icon1Class}" onclick="editFlecha(${d}, ${archerIndex}, 'flecha1')"></div>
+              <div class="flecha-icon ${icon2Class}" onclick="editFlecha(${d}, ${archerIndex}, 'flecha2')"></div>
+            </div>
+          </div>
+        `;
+      });
+      document.getElementById("archerDetailCard").style.display = "block";
+    }
+    function closeArcherDetail() {
+      document.getElementById("archerDetailCard").style.display = "none";
+      document.getElementById("dianaCard").style.display = "block";
+      document.getElementById("mainSummaryCard").style.display = "block";
+    }
+    /* Modal Edición */
+    function editFlecha(d, aIndex, flecha) {
+      editingDiana = d;
+      editingArcherIndex = aIndex;
+      editingFlecha = flecha;
+      document.getElementById("editDiana").innerText = d;
+      document.getElementById("editFlechaNum").innerText = (flecha === 'flecha1' ? '1' : '2');
+      document.getElementById("editModal").style.display = "flex";
+    }
+    function confirmEdit(newScore) {
+      if (!scores[editingDiana - 1][editingArcherIndex]) {
+        scores[editingDiana - 1][editingArcherIndex] = { flecha1: null, flecha2: null };
+      }
+      scores[editingDiana - 1][editingArcherIndex][editingFlecha] = newScore;
+      document.getElementById("editModal").style.display = "none";
+      updateSummary();
+      saveSession();
+      showArcherDetail(editingArcherIndex);
+    }
+    function cancelEdit() {
+      document.getElementById("editModal").style.display = "none";
+    }
+    /* Filtra el array de orden dejando solo puestos con tiradas reales (Horcajo Maxi) */
+    function filtrarPuestosRealizados(order, archerIndex) {
+      if (selectedLugar !== "El Horcajo Maxi") return order;
+      return order.filter(d => {
+        const p = scores[d - 1][archerIndex];
+        return p && (p.flecha1 !== null || p.flecha2 !== null);
+      });
+    }
+    function filtrarPuestosRealizadosPatrulla(order) {
+      if (selectedLugar !== "El Horcajo Maxi") return order;
+      return order.filter(d => {
+        return participants.some((_, aIndex) => {
+          const p = scores[d - 1][aIndex];
+          return p && (p.flecha1 !== null || p.flecha2 !== null);
+        });
+      });
+    }
+    /* (B) Descarga de CSV para Patrulla */
+    function downloadPatrullaCSV_Google() {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
+      let csvContent = "";
+      let orderP = [];
+      for (let i = startDiana; i <= maxDianas; i++) orderP.push(i);
+      for (let i = 1; i < startDiana; i++) orderP.push(i);
+      orderP = filtrarPuestosRealizadosPatrulla(orderP);
+      participants.forEach((archer, archerIndex) => {
+        csvContent += `Archer,**${archer}**\n`;
+        csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
+        let totalSum = 0;
+        orderP.forEach((d) => {
+          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
+          const f1 = flechas.flecha1 || 0;
+          const f2 = flechas.flecha2 || 0;
+          const partialSum = f1 + f2;
+          totalSum += partialSum;
+          csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
+        });
+        csvContent += "\n";
+        csvContent += addStatsCSV(orderP, archerIndex, ",");
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    function downloadPatrullaCSV_Excel() {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
+      // Incluimos el BOM para UTF-8 y usamos ";" como delimitador
+      let csvContent = "\ufeff";
+      let orderPE = [];
+      for (let i = startDiana; i <= maxDianas; i++) orderPE.push(i);
+      for (let i = 1; i < startDiana; i++) orderPE.push(i);
+      orderPE = filtrarPuestosRealizadosPatrulla(orderPE);
+      participants.forEach((archer, archerIndex) => {
+        csvContent += `Archer;**${archer}**\n`;
+        csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
+        let totalSum = 0;
+        orderPE.forEach((d) => {
+          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
+          const f1 = flechas.flecha1 || 0;
+          const f2 = flechas.flecha2 || 0;
+          const partialSum = f1 + f2;
+          totalSum += partialSum;
+          csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
+        });
+        csvContent += "\n";
+        csvContent += addStatsCSV(orderPE, archerIndex, ";");
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    /* (B) Descarga individual de CSV */
+    function downloadSingleArcherCSV_Google(archerIndex) {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      const archerName = participants[archerIndex] || "Unknown";
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.csv`;
+      let csvContent = "";
+      csvContent += `Archer,**${archerName}**\n`;
+      csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
+      let totalSum = 0;
+      let order = [];
+      for (let i = startDiana; i <= maxDianas; i++) order.push(i);
+      for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
+      order.forEach((d) => {
+        const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
+        const f1 = flechas.flecha1 || 0;
+        const f2 = flechas.flecha2 || 0;
+        const partialSum = f1 + f2;
+        totalSum += partialSum;
+        csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
+      });
+      csvContent += "\n";
+      csvContent += addStatsCSV(order, archerIndex, ",");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    function downloadSingleArcherCSV_Excel(archerIndex) {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      const archerName = participants[archerIndex] || "Unknown";
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.csv`;
+      let csvContent = "\ufeff";
+      csvContent += `Archer;**${archerName}**\n`;
+      csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
+      let totalSum = 0;
+      let order = [];
+      for (let i = startDiana; i <= maxDianas; i++) order.push(i);
+      for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
+      order.forEach((d) => {
+        const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
+        const f1 = flechas.flecha1 || 0;
+        const f2 = flechas.flecha2 || 0;
+        const partialSum = f1 + f2;
+        totalSum += partialSum;
+        csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
+      });
+      csvContent += "\n";
+      csvContent += addStatsCSV(order, archerIndex, ";");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    /* ── Estadísticas CSV ── */
+    function addStatsCSV(order, archerIndex, sep) {
+      const st = calcularEstadisticas(order, archerIndex);
+      const vals = [11, 10, 8, 5, 0];
+      const nombres = { 11: 'Anillo (11)', 10: 'Centro (10)', 8: 'Zona 8', 5: 'Zona 5', 0: 'Fallo (0)' };
+      const totalF = st.total1 + st.total2;
+      let out = "";
+      out += `ESTADÍSTICAS${sep}${sep}${sep}${sep}\n`;
+      out += `PUNTUACIÓN TOTAL${sep}${st.total}${sep}${sep}${sep}\n`;
+      out += `${sep}${sep}${sep}${sep}\n`;
+      out += `Primeras flechas${sep}${st.sum1} pts${sep}${st.total > 0 ? ((st.sum1/st.total)*100).toFixed(1)+'%' : '0%'} del total${sep}${sep}\n`;
+      out += `Segundas flechas${sep}${st.sum2} pts${sep}${st.total > 0 ? ((st.sum2/st.total)*100).toFixed(1)+'%' : '0%'} del total${sep}${sep}\n`;
+      const diff = st.sum2 - st.sum1;
+      out += `Diferencia 2ª-1ª${sep}${diff >= 0 ? '+' : ''}${diff} pts${sep}${sep}${sep}\n`;
+      out += `${sep}${sep}${sep}${sep}\n`;
+      out += `Distribución${sep}1ª flecha${sep}2ª flecha${sep}Total${sep}% Total\n`;
+      vals.forEach(v => {
+        const c1 = st.cnt1[v] || 0;
+        const c2 = st.cnt2[v] || 0;
+        const ct = c1 + c2;
+        const pct = totalF > 0 ? ((ct / totalF) * 100).toFixed(1) + '%' : '0%';
+        out += `${nombres[v]}${sep}${c1}x${sep}${c2}x${sep}${ct}x${sep}${pct}\n`;
+      });
+      out += `${sep}${sep}${sep}${sep}\n`;
+      return out;
+    }
+
+    /* ── Estadísticas PDF ── */
+    function calcularEstadisticas(order, archerIndex) {
+      const vals = [0, 5, 8, 10, 11];
+      const cnt1 = {}, cnt2 = {};
+      vals.forEach(v => { cnt1[v] = 0; cnt2[v] = 0; });
+      let sum1 = 0, sum2 = 0, total1 = 0, total2 = 0;
+      order.forEach(d => {
+        const p = scores[d - 1][archerIndex] || { flecha1: null, flecha2: null };
+        const f1 = p.flecha1; const f2 = p.flecha2;
+        if (f1 !== null) { sum1 += f1; total1++; if (cnt1[f1] !== undefined) cnt1[f1]++; }
+        if (f2 !== null) { sum2 += f2; total2++; if (cnt2[f2] !== undefined) cnt2[f2]++; }
+      });
+      return { sum1, sum2, total: sum1 + sum2, total1, total2, cnt1, cnt2 };
+    }
+
+    function dibujarEstadisticasPDF(doc, archerIndex, order) {
+      const st = calcularEstadisticas(order, archerIndex);
+      const vals = [11, 10, 8, 5, 0];
+      const colores = {
+        11: [220, 160, 230],
+        10: [120, 195, 245],
+         8: [255, 195, 100],
+         5: [140, 215, 145],
+         0: [240, 120, 110]
+      };
+      const nombres = { 11: 'Anillo (11)', 10: 'Centro (10)', 8: 'Zona 8', 5: 'Zona 5', 0: 'Fallo (0)' };
+
+      let y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 60) + 14;
+      const pgH = doc.internal.pageSize.getHeight();
+      if (y + 95 > pgH) { doc.addPage(); y = 20; }
+
+      // ── Título sección ──
+      doc.setFillColor(40, 60, 45);
+      doc.roundedRect(14, y, 182, 9, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10); doc.setFont(undefined, 'bold');
+      doc.text('ESTADÍSTICAS DEL RECORRIDO', 105, y + 6.2, { align: 'center' });
+      y += 14;
+
+      // ── Total general destacado ──
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(14, y, 182, 14, 3, 3, 'F');
+      doc.setDrawColor(40, 60, 45); doc.setLineWidth(0.5);
+      doc.roundedRect(14, y, 182, 14, 3, 3, 'S');
+      doc.setTextColor(40, 60, 45);
+      doc.setFontSize(15); doc.setFont(undefined, 'bold');
+      doc.text(`PUNTUACIÓN TOTAL: ${st.total}`, 105, y + 9.5, { align: 'center' });
+      y += 20;
+
+      // ── Bloque 1ªs y 2ªs flechas ──
+      const pct1 = st.total > 0 ? ((st.sum1 / st.total) * 100).toFixed(1) : '0.0';
+      const pct2 = st.total > 0 ? ((st.sum2 / st.total) * 100).toFixed(1) : '0.0';
+
+      // Caja 1ªs flechas
+      doc.setFillColor(230, 240, 255);
+      doc.roundedRect(14, y, 88, 18, 2, 2, 'F');
+      doc.setTextColor(30, 60, 120);
+      doc.setFontSize(8); doc.setFont(undefined, 'normal');
+      doc.text('PRIMERAS FLECHAS', 58, y + 5.5, { align: 'center' });
+      doc.setFontSize(14); doc.setFont(undefined, 'bold');
+      doc.text(`${st.sum1} pts`, 58, y + 13.5, { align: 'center' });
+      doc.setFontSize(7); doc.setFont(undefined, 'normal');
+      doc.text(`${pct1}% del total`, 58, y + 18, { align: 'center' });
+
+      // Caja 2ªs flechas
+      doc.setFillColor(230, 255, 235);
+      doc.roundedRect(108, y, 88, 18, 2, 2, 'F');
+      doc.setTextColor(30, 100, 50);
+      doc.setFontSize(8); doc.setFont(undefined, 'normal');
+      doc.text('SEGUNDAS FLECHAS', 152, y + 5.5, { align: 'center' });
+      doc.setFontSize(14); doc.setFont(undefined, 'bold');
+      doc.text(`${st.sum2} pts`, 152, y + 13.5, { align: 'center' });
+      doc.setFontSize(7); doc.setFont(undefined, 'normal');
+      doc.text(`${pct2}% del total`, 152, y + 18, { align: 'center' });
+      y += 26;
+
+      // ── Separador ──
+      doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3);
+      doc.line(14, y, 196, y); y += 6;
+
+      // ── Cabecera tabla de distribución ──
+      doc.setFillColor(40, 60, 45);
+      doc.rect(14, y, 182, 7, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7); doc.setFont(undefined, 'bold');
+      doc.text('Puntuación', 36, y + 4.8, { align: 'center' });
+      doc.text('1ª flecha', 80, y + 4.8, { align: 'center' });
+      doc.text('2ª flecha', 124, y + 4.8, { align: 'center' });
+      doc.text('Total', 168, y + 4.8, { align: 'center' });
+      y += 7;
+
+      // ── Filas por puntuación ──
+      vals.forEach((v, idx) => {
+        const c1 = st.cnt1[v] || 0;
+        const c2 = st.cnt2[v] || 0;
+        const ct = c1 + c2;
+        const totalF = st.total1 + st.total2;
+        const pctT = totalF > 0 ? ((ct / totalF) * 100).toFixed(1) : '0.0';
+        const pct1v = st.total1 > 0 ? ((c1 / st.total1) * 100).toFixed(1) : '0.0';
+        const pct2v = st.total2 > 0 ? ((c2 / st.total2) * 100).toFixed(1) : '0.0';
+
+        const rowH = 10;
+        const bg = idx % 2 === 0 ? [252, 252, 252] : [245, 245, 245];
+        doc.setFillColor(...bg); doc.rect(14, y, 182, rowH, 'F');
+
+        // Color badge puntuación
+        doc.setFillColor(...colores[v]);
+        doc.roundedRect(16, y + 1.5, 38, 7, 1.5, 1.5, 'F');
+        doc.setTextColor(40, 40, 40);
+        doc.setFontSize(8); doc.setFont(undefined, 'bold');
+        doc.text(nombres[v], 35, y + 6.8, { align: 'center' });
+
+        // 1ª flecha
+        doc.setFont(undefined, 'normal'); doc.setFontSize(7.5);
+        doc.setTextColor(60, 60, 60);
+        doc.text(`${c1}x  (${pct1v}%)`, 80, y + 6.5, { align: 'center' });
+
+        // Barra 1ª flecha
+        const barW1 = Math.round((c1 / Math.max(st.total1, 1)) * 28);
+        doc.setFillColor(...colores[v]);
+        if (barW1 > 0) doc.roundedRect(56, y + 3, barW1, 3.5, 1, 1, 'F');
+
+        // 2ª flecha
+        doc.text(`${c2}x  (${pct2v}%)`, 124, y + 6.5, { align: 'center' });
+
+        // Barra 2ª flecha
+        const barW2 = Math.round((c2 / Math.max(st.total2, 1)) * 28);
+        doc.setFillColor(...colores[v]);
+        if (barW2 > 0) doc.roundedRect(100, y + 3, barW2, 3.5, 1, 1, 'F');
+
+        // Total
+        doc.setFont(undefined, 'bold'); doc.setFontSize(8);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`${ct}x  (${pctT}%)`, 168, y + 6.5, { align: 'center' });
+
+        // Barra total
+        const barWT = Math.round((ct / Math.max(totalF, 1)) * 28);
+        doc.setFillColor(...colores[v]);
+        if (barWT > 0) doc.roundedRect(144, y + 3, barWT, 3.5, 1, 1, 'F');
+
+        y += rowH;
+      });
+
+      // ── Pie: diferencia 1ª vs 2ª ──
+      y += 4;
+      if (y + 10 > pgH) { doc.addPage(); y = 20; }
+      const diff = st.sum2 - st.sum1;
+      const diffTxt = diff >= 0
+        ? `Las 2ªs flechas aportaron +${diff} pts más que las 1ªs`
+        : `Las 1ªs flechas aportaron +${Math.abs(diff)} pts más que las 2ªs`;
+      doc.setFontSize(7.5); doc.setFont(undefined, 'italic');
+      doc.setTextColor(100, 100, 100);
+      doc.text(diffTxt, 105, y, { align: 'center' });
+    }
+    /* (C) Descarga de PDF (individual y patrulla) se mantiene igual que antes */
+    function downloadSingleArcherPDF(archerIndex) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      const archerName = participants[archerIndex] || "Unknown";
+      doc.setFontSize(16);
+      doc.text(`${placeStr} ${dateStr} ${patrullaStr} - ${archerName}`, 14, 20);
+      let order = [];
+      for (let i = startDiana; i <= maxDianas; i++) order.push(i);
+      for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
+      let rows = [];
+      let totalSum = 0;
+      order.forEach(d => {
+        const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
+        const f1 = flechas.flecha1 || 0;
+        const f2 = flechas.flecha2 || 0;
+        const partialSum = f1 + f2;
+        totalSum += partialSum;
+        rows.push([d, f1, f2, partialSum, totalSum]);
+      });
+      doc.autoTable({
+        head: [['Puesto', 'Flecha 1', 'Flecha 2', 'Suma Parcial', 'Suma Total']],
+        body: rows,
+        startY: 30,
+        theme: 'grid',
+        didParseCell: function (data) {
+          if (data.row.section === 'body') {
+            if (data.column.index === 0) {
+              data.cell.styles.fillColor = [173, 216, 230];
+            } else if (data.column.index === 1 || data.column.index === 2) {
+              const score = parseInt(data.cell.raw, 10);
+              data.cell.styles.textColor = [0, 0, 0];
+              data.cell.styles.fontStyle = 'bold';
+              if (score === 11) {
+                data.cell.styles.fillColor = [
+                  Math.round(0.2 * 156 + 0.8 * 255),
+                  Math.round(0.2 * 39  + 0.8 * 255),
+                  Math.round(0.2 * 176 + 0.8 * 255)
+                ];
+              } else if (score === 10) {
+                data.cell.styles.fillColor = [
+                  Math.round(0.2 * 33  + 0.8 * 255),
+                  Math.round(0.2 * 150 + 0.8 * 255),
+                  Math.round(0.2 * 243 + 0.8 * 255)
+                ];
+              } else if (score === 8) {
+                data.cell.styles.fillColor = [
+                  Math.round(0.2 * 255 + 0.8 * 255),
+                  Math.round(0.2 * 152 + 0.8 * 255),
+                  Math.round(0.2 * 0   + 0.8 * 255)
+                ];
+              } else if (score === 5) {
+                data.cell.styles.fillColor = [
+                  Math.round(0.2 * 76  + 0.8 * 255),
+                  Math.round(0.2 * 175 + 0.8 * 255),
+                  Math.round(0.2 * 80  + 0.8 * 255)
+                ];
+              } else if (score === 0) {
+                data.cell.styles.fillColor = [
+                  Math.round(0.8 * 244 + 0.2 * 255),
+                  Math.round(0.8 * 67  + 0.2 * 255),
+                  Math.round(0.8 * 54  + 0.2 * 255)
+                ];
+              }
+            }
+          }
+        }
+      });
+      dibujarEstadisticasPDF(doc, archerIndex, order);
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.pdf`;
+      doc.save(filename);
+    }
+    function downloadPatrullaPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      for (let i = 0; i < participants.length; i++) {
+        if (i > 0) { doc.addPage(); }
+        let archerName = participants[i] || "Unknown";
+        doc.setFontSize(16);
+        doc.text(`${placeStr} ${dateStr} ${patrullaStr} - ${archerName}`, 14, 20);
+        let order = [];
+        for (let j = startDiana; j <= maxDianas; j++) order.push(j);
+        for (let j = 1; j < startDiana; j++) order.push(j);
+        order = filtrarPuestosRealizados(order, i);
+        let rows = [];
+        let totalSum = 0;
+        order.forEach(d => {
+          const flechas = scores[d - 1][i] || { flecha1: 0, flecha2: 0 };
+          const f1 = flechas.flecha1 || 0;
+          const f2 = flechas.flecha2 || 0;
+          const partialSum = f1 + f2;
+          totalSum += partialSum;
+          rows.push([d, f1, f2, partialSum, totalSum]);
+        });
+        doc.autoTable({
+          head: [['Puesto', 'Flecha 1', 'Flecha 2', 'Suma Parcial', 'Suma Total']],
+          body: rows,
+          startY: 30,
+          theme: 'grid',
+          didParseCell: function (data) {
+            if (data.row.section === 'body') {
+              if (data.column.index === 0) {
+                data.cell.styles.fillColor = [173, 216, 230];
+              } else if (data.column.index === 1 || data.column.index === 2) {
+                const score = parseInt(data.cell.raw, 10);
+                data.cell.styles.textColor = [0, 0, 0];
+                data.cell.styles.fontStyle = 'bold';
+                if (score === 11) {
+                  data.cell.styles.fillColor = [
+                    Math.round(0.2 * 156 + 0.8 * 255),
+                    Math.round(0.2 * 39  + 0.8 * 255),
+                    Math.round(0.2 * 176 + 0.8 * 255)
+                  ];
+                } else if (score === 10) {
+                  data.cell.styles.fillColor = [
+                    Math.round(0.2 * 33  + 0.8 * 255),
+                    Math.round(0.2 * 150 + 0.8 * 255),
+                    Math.round(0.2 * 243 + 0.8 * 255)
+                  ];
+                } else if (score === 8) {
+                  data.cell.styles.fillColor = [
+                    Math.round(0.2 * 255 + 0.8 * 255),
+                    Math.round(0.2 * 152 + 0.8 * 255),
+                    Math.round(0.2 * 0   + 0.8 * 255)
+                  ];
+                } else if (score === 5) {
+                  data.cell.styles.fillColor = [
+                    Math.round(0.2 * 76  + 0.8 * 255),
+                    Math.round(0.2 * 175 + 0.8 * 255),
+                    Math.round(0.2 * 80  + 0.8 * 255)
+                  ];
+                } else if (score === 0) {
+                  data.cell.styles.fillColor = [
+                    Math.round(0.8 * 244 + 0.2 * 255),
+                    Math.round(0.8 * 67  + 0.2 * 255),
+                    Math.round(0.8 * 54  + 0.2 * 255)
+                  ];
+                }
+              }
+            }
+          }
+        });
+        dibujarEstadisticasPDF(doc, i, order);
+      }
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}-Patrulla.pdf`;
+      doc.save(filename);
+    }
+    /* (D) Modal de Descarga */
+    // Para descarga individual
+    function selectDownloadFormat(archerIndex) {
+      downloadMode = "individual";
+      currentDownloadArcherIndex = archerIndex;
+      document.getElementById("downloadFormatModal").style.display = "flex";
+    }
+    // Para descarga de toda la patrulla
+    function selectDownloadFormatPatrulla() {
+      downloadMode = "patrulla";
+      document.getElementById("downloadFormatModal").style.display = "flex";
+    }
+    function confirmDownloadFormat() {
+      const format = document.getElementById("downloadFormatSelect").value;
+      if (downloadMode === "individual") {
+        if (format === "csv_google") {
+          downloadSingleArcherCSV_Google(currentDownloadArcherIndex);
+        } else if (format === "csv_excel") {
+          downloadSingleArcherCSV_Excel(currentDownloadArcherIndex);
+        } else if (format === "pdf") {
+          downloadSingleArcherPDF(currentDownloadArcherIndex);
+        }
+      } else if (downloadMode === "patrulla") {
+        if (format === "csv_google") {
+          downloadPatrullaCSV_Google();
+        } else if (format === "csv_excel") {
+          downloadPatrullaCSV_Excel();
+        } else if (format === "pdf") {
+          downloadPatrullaPDF();
+        }
+      }
+      document.getElementById("downloadFormatModal").style.display = "none";
+    }
+    function cancelDownloadFormat() {
+      document.getElementById("downloadFormatModal").style.display = "none";
+    }
+  </script>
+
+  <!-- Registro del Service Worker (PWA offline) -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js")
+          .then(() => console.log("[PWA] Service Worker registrado correctamente."))
+          .catch((err) => console.warn("[PWA] Error al registrar SW:", err));
+      });
+    }
+  </script>
+</body>
+</html>
