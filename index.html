@@ -738,7 +738,7 @@
           csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
         });
         csvContent += "\n";
-        csvContent += añadirEstadisticasCSV(orderP, archerIndex, ",");
+        csvContent += addStatsCSV(orderP, archerIndex, ",");
       });
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -773,7 +773,7 @@
           csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
         });
         csvContent += "\n";
-        csvContent += añadirEstadisticasCSV(orderPE, archerIndex, ";");
+        csvContent += addStatsCSV(orderPE, archerIndex, ";");
       });
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -808,7 +808,7 @@
         csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
       });
       csvContent += "\n";
-      csvContent += añadirEstadisticasCSV(order, archerIndex, ",");
+      csvContent += addStatsCSV(order, archerIndex, ",");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -841,7 +841,7 @@
         csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
       });
       csvContent += "\n";
-      csvContent += añadirEstadisticasCSV(order, archerIndex, ";");
+      csvContent += addStatsCSV(order, archerIndex, ";");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -853,7 +853,7 @@
     }
 
     /* ── Estadísticas CSV ── */
-    function añadirEstadisticasCSV(order, archerIndex, sep) {
+    function addStatsCSV(order, archerIndex, sep) {
       const st = calcularEstadisticas(order, archerIndex);
       const vals = [11, 10, 8, 5, 0];
       const nombres = { 11: 'Anillo (11)', 10: 'Centro (10)', 8: 'Zona 8', 5: 'Zona 5', 0: 'Fallo (0)' };
@@ -906,7 +906,7 @@
       };
       const nombres = { 11: 'Anillo (11)', 10: 'Centro (10)', 8: 'Zona 8', 5: 'Zona 5', 0: 'Fallo (0)' };
 
-      let y = doc.lastAutoTable.finalY + 14;
+      let y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 60) + 14;
       const pgH = doc.internal.pageSize.getHeight();
       if (y + 95 > pgH) { doc.addPage(); y = 20; }
 
