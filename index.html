@@ -697,6 +697,23 @@
     function cancelEdit() {
       document.getElementById("editModal").style.display = "none";
     }
+    /* Filtra el array de orden dejando solo puestos con tiradas reales (Horcajo Maxi) */
+    function filtrarPuestosRealizados(order, archerIndex) {
+      if (selectedLugar !== "El Horcajo Maxi") return order;
+      return order.filter(d => {
+        const p = scores[d - 1][archerIndex];
+        return p && (p.flecha1 !== null || p.flecha2 !== null);
+      });
+    }
+    function filtrarPuestosRealizadosPatrulla(order) {
+      if (selectedLugar !== "El Horcajo Maxi") return order;
+      return order.filter(d => {
+        return participants.some((_, aIndex) => {
+          const p = scores[d - 1][aIndex];
+          return p && (p.flecha1 !== null || p.flecha2 !== null);
+        });
+      });
+    }
     /* (B) Descarga de CSV para Patrulla */
     function downloadPatrullaCSV_Google() {
       const dateStr = new Date().toISOString().slice(0, 10);
@@ -704,17 +721,21 @@
       const patrullaStr = "Patrulla-" + startDiana;
       const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
       let csvContent = "";
+      let orderP = [];
+      for (let i = startDiana; i <= maxDianas; i++) orderP.push(i);
+      for (let i = 1; i < startDiana; i++) orderP.push(i);
+      orderP = filtrarPuestosRealizadosPatrulla(orderP);
       participants.forEach((archer, archerIndex) => {
         csvContent += `Archer,**${archer}**\n`;
         csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
         let totalSum = 0;
-        scores.forEach((p, pIndex) => {
-          const flechas = p[archerIndex] || { flecha1: 0, flecha2: 0 };
+        orderP.forEach((d) => {
+          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
           const f1 = flechas.flecha1 || 0;
           const f2 = flechas.flecha2 || 0;
           const partialSum = f1 + f2;
           totalSum += partialSum;
-          csvContent += `${pIndex + 1},${f1},${f2},${partialSum},${totalSum}\n`;
+          csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
         });
         csvContent += "\n";
       });
@@ -734,17 +755,21 @@
       const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
       // Incluimos el BOM para UTF-8 y usamos ";" como delimitador
       let csvContent = "\ufeff";
+      let orderPE = [];
+      for (let i = startDiana; i <= maxDianas; i++) orderPE.push(i);
+      for (let i = 1; i < startDiana; i++) orderPE.push(i);
+      orderPE = filtrarPuestosRealizadosPatrulla(orderPE);
       participants.forEach((archer, archerIndex) => {
         csvContent += `Archer;**${archer}**\n`;
         csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
         let totalSum = 0;
-        scores.forEach((p, pIndex) => {
-          const flechas = p[archerIndex] || { flecha1: 0, flecha2: 0 };
+        orderPE.forEach((d) => {
+          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
           const f1 = flechas.flecha1 || 0;
           const f2 = flechas.flecha2 || 0;
           const partialSum = f1 + f2;
           totalSum += partialSum;
-          csvContent += `${pIndex + 1};${f1};${f2};${partialSum};${totalSum}\n`;
+          csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
         });
         csvContent += "\n";
       });
@@ -771,6 +796,7 @@
       let order = [];
       for (let i = startDiana; i <= maxDianas; i++) order.push(i);
       for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
       order.forEach((d) => {
         const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
         const f1 = flechas.flecha1 || 0;
@@ -802,6 +828,7 @@
       let order = [];
       for (let i = startDiana; i <= maxDianas; i++) order.push(i);
       for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
       order.forEach((d) => {
         const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
         const f1 = flechas.flecha1 || 0;
@@ -833,6 +860,7 @@
       let order = [];
       for (let i = startDiana; i <= maxDianas; i++) order.push(i);
       for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
       let rows = [];
       let totalSum = 0;
       order.forEach(d => {
@@ -908,6 +936,7 @@
         let order = [];
         for (let j = startDiana; j <= maxDianas; j++) order.push(j);
         for (let j = 1; j < startDiana; j++) order.push(j);
+        order = filtrarPuestosRealizados(order, i);
         let rows = [];
         let totalSum = 0;
         order.forEach(d => {
@@ -1020,6 +1049,7 @@
       let order = [];
       for (let i = startDiana; i <= maxDianas; i++) order.push(i);
       for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
       order.forEach((d) => {
         const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
         const f1 = flechas.flecha1 || 0;
@@ -1051,6 +1081,7 @@
       let order = [];
       for (let i = startDiana; i <= maxDianas; i++) order.push(i);
       for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
       order.forEach((d) => {
         const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
         const f1 = flechas.flecha1 || 0;
@@ -1076,17 +1107,21 @@
       const patrullaStr = "Patrulla-" + startDiana;
       const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
       let csvContent = "";
+      let orderP = [];
+      for (let i = startDiana; i <= maxDianas; i++) orderP.push(i);
+      for (let i = 1; i < startDiana; i++) orderP.push(i);
+      orderP = filtrarPuestosRealizadosPatrulla(orderP);
       participants.forEach((archer, archerIndex) => {
         csvContent += `Archer,**${archer}**\n`;
         csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
         let totalSum = 0;
-        scores.forEach((p, pIndex) => {
-          const flechas = p[archerIndex] || { flecha1: 0, flecha2: 0 };
+        orderP.forEach((d) => {
+          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
           const f1 = flechas.flecha1 || 0;
           const f2 = flechas.flecha2 || 0;
           const partialSum = f1 + f2;
           totalSum += partialSum;
-          csvContent += `${pIndex + 1},${f1},${f2},${partialSum},${totalSum}\n`;
+          csvContent += `${d},${f1},${f2},${partialSum},${totalSum}\n`;
         });
         csvContent += "\n";
       });
@@ -1105,17 +1140,21 @@
       const patrullaStr = "Patrulla-" + startDiana;
       const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
       let csvContent = "\ufeff"; // BOM para Excel
+      let orderPE = [];
+      for (let i = startDiana; i <= maxDianas; i++) orderPE.push(i);
+      for (let i = 1; i < startDiana; i++) orderPE.push(i);
+      orderPE = filtrarPuestosRealizadosPatrulla(orderPE);
       participants.forEach((archer, archerIndex) => {
         csvContent += `Archer;**${archer}**\n`;
         csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
         let totalSum = 0;
-        scores.forEach((p, pIndex) => {
-          const flechas = p[archerIndex] || { flecha1: 0, flecha2: 0 };
+        orderPE.forEach((d) => {
+          const flechas = scores[d - 1][archerIndex] || { flecha1: 0, flecha2: 0 };
           const f1 = flechas.flecha1 || 0;
           const f2 = flechas.flecha2 || 0;
           const partialSum = f1 + f2;
           totalSum += partialSum;
-          csvContent += `${pIndex + 1};${f1};${f2};${partialSum};${totalSum}\n`;
+          csvContent += `${d};${f1};${f2};${partialSum};${totalSum}\n`;
         });
         csvContent += "\n";
       });
