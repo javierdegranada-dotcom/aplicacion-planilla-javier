@@ -1201,28 +1201,49 @@
     }
     function confirmDownloadFormat() {
       const format = document.getElementById("downloadFormatSelect").value;
-      if (downloadMode === "individual") {
-        if (format === "csv_google") {
-          downloadSingleArcherCSV_Google(currentDownloadArcherIndex);
-        } else if (format === "csv_excel") {
-          downloadSingleArcherCSV_Excel(currentDownloadArcherIndex);
-        } else if (format === "pdf") {
-          downloadSingleArcherPDF(currentDownloadArcherIndex);
-        }
-      } else if (downloadMode === "patrulla") {
-        if (format === "csv_google") {
-          downloadPatrullaCSV_Google();
-        } else if (format === "csv_excel") {
-          downloadPatrullaCSV_Excel();
-        } else if (format === "pdf") {
-          downloadPatrullaPDF();
-        }
-      }
       document.getElementById("downloadFormatModal").style.display = "none";
+      try {
+        if (downloadMode === "individual") {
+          if (format === "csv_google") {
+            downloadSingleArcherCSV_Google(currentDownloadArcherIndex);
+          } else if (format === "csv_excel") {
+            downloadSingleArcherCSV_Excel(currentDownloadArcherIndex);
+          } else if (format === "pdf") {
+            downloadSingleArcherPDF(currentDownloadArcherIndex);
+          }
+        } else if (downloadMode === "patrulla") {
+          if (format === "csv_google") {
+            downloadPatrullaCSV_Google();
+          } else if (format === "csv_excel") {
+            downloadPatrullaCSV_Excel();
+          } else if (format === "pdf") {
+            downloadPatrullaPDF();
+          }
+        }
+      } catch(e) {
+        alert("ERROR al descargar: " + e.message + "\n\nLínea: " + e.stack);
+      }
     }
     function cancelDownloadFormat() {
       document.getElementById("downloadFormatModal").style.display = "none";
     }
+    function showDownloadCard() {
+      const summaryCard = document.getElementById("mainSummaryCard");
+      const downloadCard = document.getElementById("downloadCard");
+      const buttonsDiv = document.getElementById("downloadButtons");
+      summaryCard.style.display = "none";
+      downloadCard.style.display = "block";
+      buttonsDiv.innerHTML = "";
+      participants.forEach((name, i) => {
+        buttonsDiv.innerHTML += `<button class="btn-primario" onclick="selectDownloadFormat(${i})">Descargar ${name}</button>`;
+      });
+      buttonsDiv.innerHTML += `<button class="btn-secundario" onclick="selectDownloadFormatPatrulla()">Descargar Patrulla completa</button>`;
+    }
+    function closeDownloadCard() {
+      document.getElementById("downloadCard").style.display = "none";
+      document.getElementById("mainSummaryCard").style.display = "block";
+    }
+
   </script>
 
   <!-- Registro del Service Worker (PWA offline) -->
