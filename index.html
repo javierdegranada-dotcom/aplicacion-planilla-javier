@@ -951,16 +951,38 @@
       const patrullaStr = "Patrulla-" + startDiana;
       return `${placeStr}-${dateStr}-${patrullaStr}`;
     }
+    /* Resumen mínimo para compartir por WhatsApp: el Clasificador de Resultados
+       solo lee la línea "Archer,**Nombre**-MOD" y "PUNTUACIÓN TOTAL" — nada
+       del resto (flecha a flecha, distribución, porcentajes...) le hace falta.
+       Así el mensaje de WhatsApp queda corto y legible en vez de un muro de
+       texto por patrulla. */
+    function construirResumenPatrulla() {
+      let orderP = [];
+      for (let i = startDiana; i <= maxDianas; i++) orderP.push(i);
+      for (let i = 1; i < startDiana; i++) orderP.push(i);
+      orderP = filtrarPuestosRealizadosPatrulla(orderP);
+      let texto = `${nombreBasePatrulla()}\n\n`;
+      participants.forEach((archer, archerIndex) => {
+        const st = calcularEstadisticas(orderP, archerIndex);
+        texto += `Archer,**${archer}**${sufijoModalidad(archerIndex)}\n`;
+        texto += `PUNTUACIÓN TOTAL,${st.total}\n\n`;
+      });
+      return texto.trim() + "\n";
+    }
     function downloadPatrullaCSV_Google() {
       const csvContent = construirContenidoPatrulla();
       entregarTexto(csvContent, `${nombreBasePatrulla()}.csv`, 'text/csv;charset=utf-8');
     }
     function downloadPatrullaTXT() {
-      // Mismo contenido que el CSV, pero como .txt: se comparte sin problemas
-      // por WhatsApp en cualquier móvil, y el Clasificador de Resultados
-      // también sabe leer archivos .txt igual que los CSV.
-      const csvContent = construirContenidoPatrulla();
-      entregarTexto(csvContent, `${nombreBasePatrulla()}.txt`, 'text/plain;charset=utf-8');
+      // Al compartir: resumen mínimo y corto (solo nombre+modalidad+total por
+      // arquero), para que el mensaje de WhatsApp no sea un muro de texto.
+      // Al descargar: contenido completo, útil como archivo de registro.
+      const filename = `${nombreBasePatrulla()}.txt`;
+      if (modoEntrega === "compartir") {
+        compartirComoTexto(construirResumenPatrulla(), filename);
+      } else {
+        entregarTexto(construirContenidoPatrulla(), filename, 'text/plain;charset=utf-8');
+      }
     }
     function downloadPatrullaCSV_Excel() {
       const dateStr = new Date().toISOString().slice(0, 10);
@@ -1033,6 +1055,29 @@
     }
     function cerrarAvisoDescargaModal() {
       document.getElementById("avisoDescargaModal").style.display = "none";
+    }
+
+    /* Compartir como TEXTO (no como archivo): el móvil solo tiene que pasar
+       una cadena de texto a WhatsApp, no un archivo — esto es mucho más
+       fiable en todos los móviles que compartir archivos, porque no depende
+       de listas de tipos de archivo "permitidos" del sistema. Si por lo que
+       sea el navegador no soporta ni siquiera esto, cae a descargar el .txt
+       como archivo normal (con el aviso de dónde encontrarlo). */
+    async function compartirComoTexto(texto, filename) {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: "Resultados Tiro con Arco - Gaia",
+            text: texto
+          });
+          return;
+        } catch (e) {
+          if (e && e.name === "AbortError") return;
+          console.warn("[Compartir texto] Falló, se prueba otra vía:", e);
+        }
+      }
+      const blob = new Blob([texto], { type: "text/plain;charset=utf-8" });
+      await entregarBlob(blob, filename);
     }
 
     /* Envoltorio simple: construye el blob de texto (CSV) y lo entrega. */
@@ -1139,13 +1184,27 @@
       const archerName = participants[archerIndex] || "Unknown";
       return `${placeStr}-${dateStr}-${patrullaStr}-${archerName}${sufijoModalidad(archerIndex)}`;
     }
+    /* Resumen mínimo para compartir por WhatsApp (ver nota en construirResumenPatrulla) */
+    function construirResumenArquero(archerIndex) {
+      const archerName = participants[archerIndex] || "Unknown";
+      let order = [];
+      for (let i = startDiana; i <= maxDianas; i++) order.push(i);
+      for (let i = 1; i < startDiana; i++) order.push(i);
+      order = filtrarPuestosRealizados(order, archerIndex);
+      const st = calcularEstadisticas(order, archerIndex);
+      return `${nombreBaseArquero(archerIndex)}\n\nArcher,**${archerName}**${sufijoModalidad(archerIndex)}\nPUNTUACIÓN TOTAL,${st.total}\n`;
+    }
     function downloadSingleArcherCSV_Google(archerIndex) {
       const csvContent = construirContenidoArquero(archerIndex);
       entregarTexto(csvContent, `${nombreBaseArquero(archerIndex)}.csv`, 'text/csv;charset=utf-8');
     }
     function downloadSingleArcherTXT(archerIndex) {
-      const csvContent = construirContenidoArquero(archerIndex);
-      entregarTexto(csvContent, `${nombreBaseArquero(archerIndex)}.txt`, 'text/plain;charset=utf-8');
+      const filename = `${nombreBaseArquero(archerIndex)}.txt`;
+      if (modoEntrega === "compartir") {
+        compartirComoTexto(construirResumenArquero(archerIndex), filename);
+      } else {
+        entregarTexto(construirContenidoArquero(archerIndex), filename, 'text/plain;charset=utf-8');
+      }
     }
     function downloadSingleArcherCSV_Excel(archerIndex) {
       const dateStr = new Date().toISOString().slice(0, 10);
