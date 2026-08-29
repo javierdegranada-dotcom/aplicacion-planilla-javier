@@ -1008,13 +1008,12 @@
         }))
       };
       try {
-        const resp = await fetch(APPS_SCRIPT_URL, {
-          method: "POST",
-          // "text/plain" evita que el navegador lance una petición previa
-          // (preflight OPTIONS) que Apps Script no gestiona bien por defecto.
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload)
-        });
+        // Se manda por GET (con los datos como parámetro), igual que la
+        // consulta de la clasificación que ya sabemos que funciona bien:
+        // las peticiones POST a Apps Script a veces pierden el cuerpo al
+        // seguir su redirección interna, mientras que GET no tiene ese problema.
+        const url = `${APPS_SCRIPT_URL}?datos=${encodeURIComponent(JSON.stringify(payload))}`;
+        const resp = await fetch(url);
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         console.log(`[Clasificación en directo] Checkpoint ${puestoCheckpoint} enviado.`);
       } catch (e) {
