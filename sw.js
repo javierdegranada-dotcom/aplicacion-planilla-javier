@@ -4,7 +4,7 @@
    Estrategia: Cache-first (funciona sin internet)
    ================================================ */
 
-const CACHE_NAME = "arco-gaia-v8";
+const CACHE_NAME = "arco-gaia-v9";
 
 // Archivos que se guardan en caché al instalar
 const ARCHIVOS_CACHE = [
@@ -13,7 +13,11 @@ const ARCHIVOS_CACHE = [
   "/aplicacion-planilla-javier/icon-192x192.png",
   "/aplicacion-planilla-javier/icon-512x512.png",
   "/aplicacion-planilla-javier/apple-touch-icon.png",
-  "/aplicacion-planilla-javier/favicon-32x32.png"
+  "/aplicacion-planilla-javier/favicon-32x32.png",
+  // Librerías de generación de PDF: se cachean para que la descarga en PDF
+  // funcione en el campo de tiro aunque no haya cobertura en ese momento.
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"
 ];
 
 // Instalación: guardar todos los archivos en caché
