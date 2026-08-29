@@ -67,6 +67,62 @@
     #splashScreen button:hover {
       opacity: 0.9;
     }
+    /* Aviso de nueva versión de la app disponible (ver registro del Service
+       Worker al final del documento). Se muestra cuando el navegador ya
+       activó una versión más nueva pero la página sigue mostrando el HTML
+       antiguo, hasta que el arquero decide recargar. */
+    #updateBanner {
+      display: none;
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: #1a3a2a;
+      color: #fff;
+      padding: 12px 15px;
+      font-size: 0.95em;
+      z-index: 100000;
+      box-shadow: 0 -2px 6px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    #updateBanner button {
+      margin-left: 10px;
+    }
+    /* ===============================
+       Estilos para el Modal de Clasificación en Directo
+       =============================== */
+    #liveRankingCard {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+    #liveRankingContent {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      max-width: 500px;
+      width: 90vw;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    #liveRankingEstado {
+      font-size: 0.8em;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    /* Destello breve cuando llegan datos nuevos, para que se note que se
+       ha actualizado sin tener que estar mirando fijamente. */
+    @keyframes liveRankingFlash {
+      0% { background-color: #fff59d; }
+      100% { background-color: transparent; }
+    }
+    .live-flash {
+      animation: liveRankingFlash 0.9s ease-out;
+    }
     .card {
       background: rgba(255,255,255,0.9);
       border-radius: 10px;
@@ -342,6 +398,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
+  <!-- Aviso de nueva versión disponible (Service Worker actualizado) -->
+  <div id="updateBanner">
+    Hay una nueva versión de la app.
+    <button class="btn-primario" onclick="location.reload()">Actualizar ahora</button>
+  </div>
   <!-- Splash -->
   <div id="splashScreen">
     <img src="https://files.123inventatuweb.com/acens187443/image/logomsresolucionarquerosgaianegroyblanco.jpg" alt="Logo Arqueros Gaia">
@@ -442,7 +503,17 @@
     <h2><strong>Resumen</strong></h2>
     <div id="resume-total"></div>
     <div id="resume-buttons"></div>
+    <button class="btn-azulClaro" onclick="verClasificacionMitad()">Ver clasificación en directo</button>
     <button class="btn-secundario" onclick="showDownloadCard()">Descargas</button>
+  </div>
+  <!-- Clasificación en directo (checkpoints cada 6 tiradas) -->
+  <div id="liveRankingCard">
+    <div id="liveRankingContent">
+      <h3>Clasificación en directo</h3>
+      <div id="liveRankingEstado">Cargando...</div>
+      <div id="liveRankingBody"><p>Cargando...</p></div>
+      <button class="btn-peligro" onclick="cerrarLiveRanking()">Cerrar</button>
+    </div>
   </div>
   <!-- Pantalla de Descarga -->
   <div class="card" id="downloadCard">
@@ -531,6 +602,30 @@
     // ────────────────────────────────────────────────────────────
     const URL_APP_PUBLICA = "https://javierdegranada-dotcom.github.io/aplicacion-planilla-javier/";
 
+    // ────────────────────────────────────────────────────────────
+    // URL del Apps Script publicado como "aplicación web" que hace de
+    // clasificación en directo (ver apps-script-clasificacion.gs.txt).
+    // Sustituye este texto por la URL que te da Google al publicarlo
+    // ("Implementar" > "Nueva implementación" > "Aplicación web").
+    // Mientras diga "PON_AQUI...", la app funciona igual que siempre,
+    // simplemente no intenta enviar ni consultar la clasificación en directo.
+    // ────────────────────────────────────────────────────────────
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEWl3i7sxFFUCUPu2htNsj5F_vU91OVnAMyFZWGsd3E9OLwydyLBnAKbvItMUHDkOG/exec";
+
+    // Mismo orden y mismos nombres de modalidad que en el selector de
+    // arqueros, para que la clasificación en directo agrupe las categorías
+    // igual que se ven en el resto de la app.
+    // ACO va al final: suelen tardar más en subir sus puntuaciones, así que
+    // su tabla es la que más tiempo se ve incompleta — mejor al final que
+    // arriba del todo.
+    const ORDEN_MODALIDADES = ["ARI", "ADE", "ALO", "ACO"];
+    const NOMBRES_MODALIDAD = {
+      ARI: "Arco Tradicional / Instintivo",
+      ACO: "Arco Compuesto",
+      ADE: "Arco Desnudo",
+      ALO: "Arco Longbow"
+    };
+
     let currentDiana = 1;
     let maxDianas = 24;
     let scores = Array(24).fill(null).map(() => []);
@@ -539,6 +634,14 @@
     let archerModalidad = []; // Acrónimo de modalidad de arco por arquero, mismo índice que participants
     let currentArcherIndex = 0;
     let selectedLugar = "";
+    // Clasificación en directo: cuántos puestos ha completado ya la patrulla
+    // entera (independientemente del puesto en que empezara), y hasta qué
+    // checkpoint (múltiplo de 6) se ha enviado ya. Se envía en el 6, el 12,
+    // el 18... pero no en el último tramo (24, o el total del campo): eso
+    // ya lo cubren los resultados finales de siempre.
+    const INTERVALO_CHECKPOINT_CLASIFICACION = 6;
+    let dianasCompletadas = 0;
+    let ultimoCheckpointEnviado = 0;
     let editingDiana = null;
     let editingArcherIndex = null;
     let editingFlecha = null;
@@ -667,6 +770,8 @@
       currentArcherIndex = data.currentArcherIndex || 0;
       maxDianas = data.maxDianas || ((selectedLugar === "El Horcajo Maxi") ? 35 : 24);
       scores = data.scores || Array(maxDianas).fill(null).map(() => []);
+      dianasCompletadas = data.dianasCompletadas || 0;
+      ultimoCheckpointEnviado = data.ultimoCheckpointEnviado || 0;
       document.getElementById("restoreSessionCard").style.display = "none";
       document.getElementById("dianaCard").style.display = "block";
       document.getElementById("currentDiana").innerText = currentDiana;
@@ -692,7 +797,9 @@
         currentDiana,
         currentArcherIndex,
         maxDianas,
-        scores
+        scores,
+        dianasCompletadas,
+        ultimoCheckpointEnviado
       };
       try {
         localStorage.setItem("archerySession", JSON.stringify(data));
@@ -747,8 +854,13 @@
       const lugarValue = document.getElementById("selectLugar").value;
       if (!lugarValue) { alert("Por favor, selecciona un lugar."); return; }
       if (lugarValue === "Otro") {
-        const customPlace = document.getElementById("otroLugarInput").value.trim();
+        let customPlace = document.getElementById("otroLugarInput").value.trim();
         if (!customPlace) { alert("Por favor, introduce el nombre del lugar."); return; }
+        // El nombre de archivo/mensaje usa "-" como separador
+        // (Lugar-AAAA-MM-DD-Patrulla-N...). Si el propio nombre del lugar
+        // llevara un guion, podría confundir a la herramienta de
+        // clasificación al leerlo, así que lo sustituimos por un espacio.
+        customPlace = customPlace.replace(/-/g, " ").replace(/\s+/g, " ").trim();
         selectedLugar = customPlace;
       } else {
         selectedLugar = lugarValue;
@@ -756,6 +868,10 @@
       // Definir el número máximo de dianas según el campo
       maxDianas = (selectedLugar === "El Horcajo Maxi") ? 35 : 24;
       scores = Array(maxDianas).fill(null).map(() => []);
+      // Clasificación en directo: reiniciar los contadores de checkpoint
+      // para este nuevo recorrido.
+      dianasCompletadas = 0;
+      ultimoCheckpointEnviado = 0;
       const numArqueros = parseInt(document.getElementById("numArqueros").value);
       if (!numArqueros || numArqueros < 1 || numArqueros > 6) { alert("Por favor, selecciona un número válido de arqueros (1 a 6)."); return; }
       participants = [];
@@ -812,6 +928,8 @@
       currentArcherIndex++;
       if (currentArcherIndex >= participants.length) {
         currentArcherIndex = 0;
+        dianasCompletadas++;
+        comprobarEnvioCheckpointClasificacion();
         currentDiana = (currentDiana === maxDianas) ? 1 : (currentDiana + 1);
         if (currentDiana === startDiana) {
           alert("Has completado todas las Patrullas.");
@@ -829,6 +947,188 @@
       updateSummary();
       saveSession();
     }
+
+    /* ══════════════════════════════════════════════════════════
+       Clasificación en directo (Google Sheets vía Apps Script)
+       ══════════════════════════════════════════════════════════
+       Cuando la patrulla entera completa el puesto de mitad de recorrido,
+       se envía el parcial de cada arquero a una hoja compartida, para que
+       cualquiera pueda consultar cómo va la clasificación conjunta antes
+       de terminar. Es un añadido informativo: si falla (sin cobertura en
+       ese momento, Apps Script no configurado, etc.) no afecta en nada al
+       apuntado ni a los resultados finales, que siguen su camino de
+       siempre por descarga/WhatsApp. */
+
+    function comprobarEnvioCheckpointClasificacion() {
+      // Cada uno puede empezar en un puesto distinto: por eso el disparador
+      // es "tiradas completadas por la patrulla" (dianasCompletadas), no el
+      // número de diana en sí, que varía según dónde empezara cada una.
+      if (dianasCompletadas <= ultimoCheckpointEnviado) return;
+      if (dianasCompletadas % INTERVALO_CHECKPOINT_CLASIFICACION !== 0) return;
+      if (dianasCompletadas >= maxDianas) return; // el último tramo lo cubren los resultados finales de siempre
+      ultimoCheckpointEnviado = dianasCompletadas;
+      saveSession();
+      enviarParcialClasificacion(dianasCompletadas);
+    }
+
+    function calcularTotalHastaAhora(archerIndex) {
+      let total = 0;
+      scores.forEach((puesto) => {
+        if (puesto[archerIndex]) {
+          total += (puesto[archerIndex].flecha1 || 0) + (puesto[archerIndex].flecha2 || 0);
+        }
+      });
+      return total;
+    }
+
+    async function enviarParcialClasificacion(puestoCheckpoint, intento = 1) {
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("PON_AQUI")) {
+        console.warn("[Clasificación en directo] APPS_SCRIPT_URL no configurada, no se envía.");
+        return;
+      }
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const payload = {
+        lugar: selectedLugar,
+        fecha: dateStr,
+        patrulla: startDiana,
+        puesto: puestoCheckpoint,
+        arqueros: participants.map((nombre, i) => ({
+          nombre,
+          modalidad: archerModalidad[i] || "",
+          puntos: calcularTotalHastaAhora(i)
+        }))
+      };
+      try {
+        const resp = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          // "text/plain" evita que el navegador lance una petición previa
+          // (preflight OPTIONS) que Apps Script no gestiona bien por defecto.
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        console.log(`[Clasificación en directo] Checkpoint ${puestoCheckpoint} enviado.`);
+      } catch (e) {
+        console.warn(`[Clasificación en directo] Checkpoint ${puestoCheckpoint}, intento ${intento} fallido:`, e);
+        if (intento < 3) {
+          setTimeout(() => enviarParcialClasificacion(puestoCheckpoint, intento + 1), 8000);
+        } else {
+          // Tras varios intentos sin suerte, no insistimos más con este
+          // checkpoint concreto: el siguiente (a los 6 puestos siguientes)
+          // llevará igualmente el total acumulado hasta ese momento, así
+          // que no se pierde información, solo se salta una actualización
+          // intermedia. Los resultados finales tampoco se ven afectados.
+          console.warn(`[Clasificación en directo] Checkpoint ${puestoCheckpoint} descartado tras 3 intentos.`);
+        }
+      }
+    }
+
+    // Mientras la ventana de clasificación está abierta, se refresca sola
+    // cada 15 segundos (sin que haga falta volver a pulsar el botón).
+    const INTERVALO_REFRESCO_CLASIFICACION_MS = 15000;
+    let liveRankingIntervalId = null;
+    let liveRankingUltimaFirma = null; // para detectar cambios entre refrescos
+
+    /* Abre la ventana de clasificación en directo y arranca el refresco automático. */
+    function verClasificacionMitad() {
+      document.getElementById("liveRankingCard").style.display = "flex";
+      liveRankingUltimaFirma = null;
+      cargarClasificacionMitad();
+      if (liveRankingIntervalId) clearInterval(liveRankingIntervalId);
+      liveRankingIntervalId = setInterval(cargarClasificacionMitad, INTERVALO_REFRESCO_CLASIFICACION_MS);
+    }
+
+    /* Cierra la ventana y para el refresco automático (para no seguir
+       gastando datos/batería con la ventana ya cerrada). */
+    function cerrarLiveRanking() {
+      document.getElementById("liveRankingCard").style.display = "none";
+      if (liveRankingIntervalId) {
+        clearInterval(liveRankingIntervalId);
+        liveRankingIntervalId = null;
+      }
+    }
+
+    function horaActual() {
+      const d = new Date();
+      return d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
+    }
+
+    /* Consulta la clasificación conjunta (todas las patrullas que ya hayan
+       enviado algún checkpoint) del mismo lugar+fecha, y la muestra en
+       pantalla. La llama tanto el botón como el refresco automático. */
+    async function cargarClasificacionMitad() {
+      const body = document.getElementById("liveRankingBody");
+      const estado = document.getElementById("liveRankingEstado");
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("PON_AQUI")) {
+        body.innerHTML = "<p>La clasificación en directo todavía no está configurada en esta app.</p>";
+        estado.textContent = "";
+        return;
+      }
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const url = `${APPS_SCRIPT_URL}?lugar=${encodeURIComponent(selectedLugar)}&fecha=${encodeURIComponent(dateStr)}`;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        if (!data.arqueros || data.arqueros.length === 0) {
+          body.innerHTML = "<p>Todavía no hay ninguna patrulla que haya llegado a un checkpoint.</p>";
+          estado.textContent = "Actualizado: " + horaActual();
+          return;
+        }
+        // Se agrupa por modalidad (categoría) y cada grupo se ordena por
+        // puntos por separado, en vez de mezclar arcos distintos en una
+        // única lista — igual que compiten en la clasificación final.
+        const porModalidad = {};
+        data.arqueros.forEach((a) => {
+          const mod = a.modalidad || "Sin modalidad";
+          if (!porModalidad[mod]) porModalidad[mod] = [];
+          porModalidad[mod].push(a);
+        });
+        const modalidadesPresentes = Object.keys(porModalidad).sort((m1, m2) => {
+          const i1 = ORDEN_MODALIDADES.indexOf(m1);
+          const i2 = ORDEN_MODALIDADES.indexOf(m2);
+          if (i1 === -1 && i2 === -1) return m1.localeCompare(m2);
+          if (i1 === -1) return 1;
+          if (i2 === -1) return -1;
+          return i1 - i2;
+        });
+
+        // Para detectar cambios entre refrescos da igual el agrupado: se
+        // compara contra una firma estable de todos los datos recibidos.
+        const firma = data.arqueros
+          .slice()
+          .sort((a, b) => (a.nombre + a.patrulla).localeCompare(b.nombre + b.patrulla))
+          .map(a => `${a.nombre}-${a.patrulla}:${a.puntos}:${a.tiradas}`)
+          .join("|");
+        const haCambiado = liveRankingUltimaFirma !== null && firma !== liveRankingUltimaFirma;
+        liveRankingUltimaFirma = firma;
+
+        let html = "";
+        modalidadesPresentes.forEach((mod) => {
+          const grupo = porModalidad[mod].slice().sort((a, b) => b.puntos - a.puntos);
+          const titulo = NOMBRES_MODALIDAD[mod] ? `${NOMBRES_MODALIDAD[mod]} (${mod})` : mod;
+          html += `<h4 style="margin:14px 0 4px; text-align:left;">${titulo}</h4>`;
+          html += "<table style='width:100%; border-collapse:collapse; text-align:left; font-size:0.85em; margin-bottom:6px;'>";
+          html += "<tr><th>#</th><th>Arquero</th><th>Patr.</th><th>Tir.</th><th>Puntos</th><th>Media</th></tr>";
+          grupo.forEach((a, i) => {
+            const media = a.tiradas ? (a.puntos / a.tiradas).toFixed(1) : "-";
+            html += `<tr><td>${i + 1}</td><td>${a.nombre}</td><td>${a.patrulla}</td><td>${a.tiradas || "-"}</td><td><b>${a.puntos}</b></td><td>${media}</td></tr>`;
+          });
+          html += "</table>";
+        });
+        body.innerHTML = html;
+        estado.textContent = "Actualizado: " + horaActual();
+        if (haCambiado) {
+          body.classList.remove("live-flash");
+          void body.offsetWidth; // reinicia la animación si ya se había disparado antes
+          body.classList.add("live-flash");
+        }
+      } catch (e) {
+        console.warn("[Clasificación en directo] Error al consultar:", e);
+        estado.textContent = "Sin cobertura ahora mismo — se reintentará solo en el próximo refresco";
+      }
+    }
+
     /* Resumen principal */
     function updateSummary() {
       const archerTotals = participants.map(() => 0);
@@ -948,7 +1248,7 @@
       return csvContent;
     }
     function nombreBasePatrulla() {
-      const dateStr = fechaLocalHoy();
+      const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       return `${placeStr}-${dateStr}-${patrullaStr}`;
@@ -987,7 +1287,7 @@
       }
     }
     function downloadPatrullaCSV_Excel() {
-      const dateStr = fechaLocalHoy();
+      const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
@@ -1018,18 +1318,6 @@
     function sufijoModalidad(archerIndex) {
       const m = archerModalidad[archerIndex];
       return m ? `-${m}` : "";
-    }
-    /* Fecha de HOY según la hora local del dispositivo (no UTC). Usar
-       toISOString() aquí sería un error: España va por delante de UTC, así
-       que pasada la medianoche en Greenwich (la 1 o las 2 de la madrugada en
-       España) el resultado saltaría al día siguiente aunque localmente
-       siguiera siendo el mismo día de competición. */
-    function fechaLocalHoy() {
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      return `${yyyy}-${mm}-${dd}`;
     }
 
     /* ── Entrega de archivos: descarga normal o compartir por WhatsApp/otras apps ──
@@ -1208,7 +1496,7 @@
       return csvContent;
     }
     function nombreBaseArquero(archerIndex) {
-      const dateStr = fechaLocalHoy();
+      const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
@@ -1237,7 +1525,7 @@
       }
     }
     function downloadSingleArcherCSV_Excel(archerIndex) {
-      const dateStr = fechaLocalHoy();
+      const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
@@ -1448,7 +1736,7 @@
     function downloadSingleArcherPDF(archerIndex) {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      const dateStr = fechaLocalHoy();
+      const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
@@ -1523,7 +1811,7 @@
     function downloadPatrullaPDF() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      const dateStr = fechaLocalHoy();
+      const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       for (let i = 0; i < participants.length; i++) {
@@ -1667,6 +1955,18 @@
   <!-- Registro del Service Worker (PWA offline) -->
   <script>
     if ("serviceWorker" in navigator) {
+      let swActualizado = false;
+      // Cuando el Service Worker nuevo toma el control (tras subir una
+      // versión con CACHE_NAME distinto en sw.js), la página que ya estaba
+      // abierta se queda mostrando el HTML antiguo hasta que se recarga.
+      // Este aviso deja esa decisión en manos del arquero, en vez de
+      // recargar solo y arriesgarse a interrumpir una tirada a mitad.
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (swActualizado) return;
+        swActualizado = true;
+        const banner = document.getElementById("updateBanner");
+        if (banner) banner.style.display = "block";
+      });
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("./sw.js")
           .then(() => console.log("[PWA] Service Worker registrado correctamente."))
