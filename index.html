@@ -26,17 +26,6 @@
       background: #f4f4f4;
       font-family: Arial, sans-serif;
     }
-    body::before {
-      content: "";
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: url("http://files.123inventatuweb.com/acens187443/image/logomsresolucionarquerosgaianegroyblanco.jpg")
-                  center center no-repeat;
-      background-size: cover;
-      opacity: 0.05;
-      z-index: -1;
-      pointer-events: none;
-    }
     #splashScreen {
       position: fixed;
       top: 0; left: 0;
@@ -47,6 +36,18 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+    }
+    /* Marca de agua en mosaico: solo en la pantalla inicial (splash), no en el resto de la app */
+    #splashScreen::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: url("https://files.123inventatuweb.com/acens187443/image/logomsresolucionarquerosgaianegroyblanco.jpg")
+                  repeat;
+      background-size: 70px 70px;
+      opacity: 0.06;
+      z-index: -1;
+      pointer-events: none;
     }
     #splashScreen img {
       width: 90vw;
@@ -284,6 +285,26 @@
       text-align: center;
       min-width: 300px;
     }
+    /* ===============================
+       Estilos para el Modal de Instalación iPhone
+       =============================== */
+    #iosInstallModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+    #iosInstallContent {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      max-width: 340px;
+    }
   </style>
   <!-- Incluir jsPDF y autoTable -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -292,7 +313,7 @@
 <body>
   <!-- Splash -->
   <div id="splashScreen">
-    <img src="http://files.123inventatuweb.com/acens187443/image/logomsresolucionarquerosgaianegroyblanco.jpg" alt="Logo Arqueros Gaia">
+    <img src="https://files.123inventatuweb.com/acens187443/image/logomsresolucionarquerosgaianegroyblanco.jpg" alt="Logo Arqueros Gaia">
     <button class="btn-primario" onclick="ocultarSplash()">Pulse para continuar</button>
   </div>
   <!-- Restaurar sesión -->
@@ -303,6 +324,16 @@
       <button class="btn-secundario" onclick="restoreSession()">Recuperar Sesión</button>
       <button class="btn-peligro" onclick="deleteSession()">Nueva Sesión</button>
     </div>
+  </div>
+  <!-- Bienvenida: instalar / compartir app / comenzar -->
+  <div class="card" id="welcomeCard" style="display:none;">
+    <h1><strong>Tiro con Arco - Gaia</strong></h1>
+    <p>Instala la app en tu móvil para tenerla siempre a mano, o compártela con otro arquero.</p>
+    <button class="btn-secundario" onclick="instalarApp()">📲 Instalar la app</button>
+    <br>
+    <button class="btn-azulClaro" onclick="compartirApp()">🔗 Compartir con otro arquero</button>
+    <br>
+    <button class="btn-primario" onclick="irAStartCard()">Comenzar</button>
   </div>
   <!-- Config -->
   <div class="card" id="startCard" style="display:none;">
@@ -333,11 +364,7 @@
       <div id="participantInputs"></div>
     </div>
     <p>Selecciona la <strong>Patrulla</strong> (Puesto inicial):</p>
-    <select id="startDiana">
-      <script>
-        for (let i = 1; i <= 24; i++) { document.write(`<option value="${i}">${i}</option>`); }
-      </script>
-    </select>
+    <select id="startDiana"></select>
     <button class="btn-secundario" onclick="startRecorrido()">Comenzar</button>
     <button class="btn-primario" onclick="showCreditos()">Créditos</button>
   </div>
@@ -417,6 +444,22 @@
       <button class="btn-peligro" onclick="cancelEdit()">Cancelar</button>
     </div>
   </div>
+  <!-- Modal con instrucciones para instalar en iPhone (Safari no permite instalar con un botón) -->
+  <div id="iosInstallModal">
+    <div id="iosInstallContent">
+      <h3>Instalar en iPhone/iPad</h3>
+      <p style="text-align:left;">
+        En iPhone, Safari no permite instalar la app con un botón (es una limitación de Apple, no de la app). Para instalarla:
+      </p>
+      <ol style="text-align:left; padding-left: 20px;">
+        <li>Abre esta página en <strong>Safari</strong> (no vale otro navegador).</li>
+        <li>Pulsa el icono <strong>Compartir</strong> (el cuadrado con una flecha hacia arriba), en la barra inferior o superior.</li>
+        <li>Baja y elige <strong>"Añadir a pantalla de inicio"</strong>.</li>
+        <li>Pulsa <strong>"Añadir"</strong>. El icono aparecerá en tu pantalla como una app normal.</li>
+      </ol>
+      <button class="btn-primario" onclick="cerrarIosInstallModal()">Entendido</button>
+    </div>
+  </div>
   <!-- Modal para seleccionar el formato de descarga -->
   <div id="downloadFormatModal">
     <div id="downloadFormatContent">
@@ -427,7 +470,8 @@
         <option value="pdf">PDF</option>
       </select>
       <br>
-      <button class="btn-primario" onclick="confirmDownloadFormat()">Descargar</button>
+      <button class="btn-primario" onclick="confirmDownloadFormat('descargar')">Descargar</button>
+      <button class="btn-secundario" onclick="confirmDownloadFormat('compartir')">Compartir (WhatsApp...)</button>
       <button class="btn-peligro" onclick="cancelDownloadFormat()">Cancelar</button>
     </div>
   </div>
@@ -435,11 +479,19 @@
     /* ======================
        (A) Variables y LÓGICA 
        ====================== */
+
+    // ────────────────────────────────────────────────────────────
+    // URL pública de la app (la que se comparte con "Compartir con otro arquero").
+    // Cámbiala aquí si mueves la app a otro repositorio para hacer pruebas.
+    // ────────────────────────────────────────────────────────────
+    const URL_APP_PUBLICA = "https://javierdegranada-dotcom.github.io/aplicacion-planilla-javier/";
+
     let currentDiana = 1;
     let maxDianas = 24;
     let scores = Array(24).fill(null).map(() => []);
     let startDiana = 1;
     let participants = [];
+    let archerModalidad = []; // Acrónimo de modalidad de arco por arquero, mismo índice que participants
     let currentArcherIndex = 0;
     let selectedLugar = "";
     let editingDiana = null;
@@ -448,22 +500,121 @@
     // Modo de descarga: "individual" o "patrulla"
     let downloadMode = "individual";
     let currentDownloadArcherIndex = null;
+    let modoEntrega = "descargar"; // "descargar" o "compartir" (WhatsApp / apps del móvil)
+
+    /* ── Instalación de la app ──
+       En Android/Chrome el navegador dispara "beforeinstallprompt" y podemos
+       mostrar el diálogo nativo de instalación. En iPhone/iPad (Safari) ese
+       evento no existe — es una limitación de Apple — así que mostramos
+       instrucciones paso a paso en su lugar. */
+    let deferredInstallPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+    });
+
+    function esIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+    function appYaInstalada() {
+      return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    }
+
+    async function instalarApp() {
+      if (appYaInstalada()) {
+        alert("La app ya está instalada en este dispositivo.");
+        return;
+      }
+      if (deferredInstallPrompt) {
+        // Android/Chrome/Edge: diálogo nativo de instalación
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+      } else if (esIOS()) {
+        // iPhone/iPad: Safari no permite instalar con un botón, mostramos instrucciones
+        document.getElementById("iosInstallModal").style.display = "flex";
+      } else {
+        alert("Este navegador no permite instalar la app automáticamente. Busca la opción \"Añadir a pantalla de inicio\" o \"Instalar app\" en el menú de tu navegador.");
+      }
+    }
+    function cerrarIosInstallModal() {
+      document.getElementById("iosInstallModal").style.display = "none";
+    }
+
+    async function compartirApp() {
+      const enlace = URL_APP_PUBLICA;
+      const datos = {
+        title: "Tiro con Arco - Arqueros Gaia",
+        text: "Instala la app de puntuación de Arqueros Gaia:",
+        url: enlace
+      };
+      if (navigator.share) {
+        try {
+          await navigator.share(datos);
+        } catch (e) {
+          if (e && e.name !== "AbortError") console.warn("[Compartir app] Error:", e);
+        }
+      } else if (navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(enlace);
+          alert("Enlace copiado. Puedes pegarlo en WhatsApp u otra app.");
+        } catch (e) {
+          prompt("Copia este enlace para compartirlo:", enlace);
+        }
+      } else {
+        prompt("Copia este enlace para compartirlo:", enlace);
+      }
+    }
     
+    /* Rellena el desplegable de Patrulla con las opciones 1..n (sustituye al antiguo document.write) */
+    function poblarStartDiana(totalDianas) {
+      const startDianaSelect = document.getElementById("startDiana");
+      startDianaSelect.innerHTML = "";
+      for (let i = 1; i <= totalDianas; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = i;
+        startDianaSelect.appendChild(opt);
+      }
+    }
+
+    /* Lee la sesión guardada; si localStorage no está disponible o el
+       contenido está corrupto, no rompe la app: simplemente no hay sesión previa. */
+    function leerSesionGuardada() {
+      try {
+        const saved = localStorage.getItem("archerySession");
+        if (!saved) return null;
+        return JSON.parse(saved);
+      } catch (e) {
+        console.warn("[Sesión] No se pudo leer la sesión guardada, se ignora:", e);
+        return null;
+      }
+    }
+
     function ocultarSplash() {
       document.getElementById("splashScreen").style.display = "none";
-      const saved = localStorage.getItem("archerySession");
+      const saved = leerSesionGuardada();
       if (saved) {
         document.getElementById("restoreSessionCard").style.display = "flex";
       } else {
-        document.getElementById("startCard").style.display = "block";
+        document.getElementById("welcomeCard").style.display = "block";
       }
     }
+    function irAStartCard() {
+      document.getElementById("welcomeCard").style.display = "none";
+      document.getElementById("startCard").style.display = "block";
+    }
     function restoreSession() {
-      const saved = localStorage.getItem("archerySession");
-      if (!saved) return;
-      const data = JSON.parse(saved);
+      const data = leerSesionGuardada();
+      if (!data) {
+        // Sesión no disponible o corrupta: empezar de cero en lugar de quedarse bloqueado
+        document.getElementById("restoreSessionCard").style.display = "none";
+        document.getElementById("welcomeCard").style.display = "block";
+        return;
+      }
       selectedLugar = data.selectedLugar || "";
       participants = data.participants || [];
+      archerModalidad = data.archerModalidad || [];
       startDiana = data.startDiana || 1;
       currentDiana = data.currentDiana || startDiana;
       currentArcherIndex = data.currentArcherIndex || 0;
@@ -480,21 +631,27 @@
       updateSummary();
     }
     function deleteSession() {
-      localStorage.removeItem("archerySession");
+      try { localStorage.removeItem("archerySession"); } catch (e) { console.warn("[Sesión] No se pudo borrar:", e); }
       document.getElementById("restoreSessionCard").style.display = "none";
-      document.getElementById("startCard").style.display = "block";
+      document.getElementById("welcomeCard").style.display = "block";
     }
     function saveSession() {
       const data = {
         selectedLugar,
         participants,
+        archerModalidad,
         startDiana,
         currentDiana,
         currentArcherIndex,
         maxDianas,
         scores
       };
-      localStorage.setItem("archerySession", JSON.stringify(data));
+      try {
+        localStorage.setItem("archerySession", JSON.stringify(data));
+      } catch (e) {
+        // Puede fallar si el almacenamiento está lleno o bloqueado (modo privado, etc.)
+        console.warn("[Sesión] No se pudo guardar la sesión:", e);
+      }
     }
     /* Créditos */
     function showCreditos() {
@@ -515,14 +672,7 @@
       }
       // Actualizar el desplegable de Patrulla según el campo seleccionado
       const totalDianas = (val === "El Horcajo Maxi") ? 35 : 24;
-      const startDianaSelect = document.getElementById("startDiana");
-      startDianaSelect.innerHTML = "";
-      for (let i = 1; i <= totalDianas; i++) {
-        const opt = document.createElement("option");
-        opt.value = i;
-        opt.textContent = i;
-        startDianaSelect.appendChild(opt);
-      }
+      poblarStartDiana(totalDianas);
     }
     function showParticipantInputs() {
       const numArqueros = parseInt(document.getElementById("numArqueros").value);
@@ -531,7 +681,15 @@
       if (numArqueros > 0) {
         document.getElementById("participants").style.display = "block";
         for (let i = 0; i < numArqueros; i++) {
-          participantContainer.innerHTML += `<input type="text" placeholder="Nombre del arquero ${i + 1}" id="archer${i}" required>`;
+          participantContainer.innerHTML += `
+            <input type="text" placeholder="Nombre del arquero ${i + 1}" id="archer${i}" required>
+            <select id="modalidad${i}">
+              <option value="ARI">Arco Tradicional / Instintivo</option>
+              <option value="ACO">Arco Compuesto</option>
+              <option value="ADE">Arco Desnudo</option>
+              <option value="ALO">Arco Longbow</option>
+            </select>
+          `;
         }
       } else {
         document.getElementById("participants").style.display = "none";
@@ -553,10 +711,13 @@
       const numArqueros = parseInt(document.getElementById("numArqueros").value);
       if (!numArqueros || numArqueros < 1 || numArqueros > 6) { alert("Por favor, selecciona un número válido de arqueros (1 a 6)."); return; }
       participants = [];
+      archerModalidad = [];
       for (let i = 0; i < numArqueros; i++) {
         const name = document.getElementById(`archer${i}`).value.trim();
         if (!name) { alert("Completa todos los nombres de los arqueros."); return; }
         participants.push(name);
+        const modalidadSelect = document.getElementById(`modalidad${i}`);
+        archerModalidad.push(modalidadSelect ? modalidadSelect.value : "");
       }
       const selDiana = parseInt(document.getElementById("startDiana").value);
       if (!selDiana || selDiana < 1 || selDiana > maxDianas) { alert(`Por favor, selecciona un puesto válido (1-${maxDianas}).`); return; }
@@ -726,7 +887,7 @@
       for (let i = 1; i < startDiana; i++) orderP.push(i);
       orderP = filtrarPuestosRealizadosPatrulla(orderP);
       participants.forEach((archer, archerIndex) => {
-        csvContent += `Archer,**${archer}**\n`;
+        csvContent += `Archer,**${archer}**${sufijoModalidad(archerIndex)}\n`;
         csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
         let totalSum = 0;
         orderP.forEach((d) => {
@@ -741,13 +902,7 @@
         csvContent += addStatsCSV(orderP, archerIndex, ",");
       });
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      entregarBlob(blob, filename);
     }
     function downloadPatrullaCSV_Excel() {
       const dateStr = new Date().toISOString().slice(0, 10);
@@ -761,7 +916,7 @@
       for (let i = 1; i < startDiana; i++) orderPE.push(i);
       orderPE = filtrarPuestosRealizadosPatrulla(orderPE);
       participants.forEach((archer, archerIndex) => {
-        csvContent += `Archer;**${archer}**\n`;
+        csvContent += `Archer;**${archer}**${sufijoModalidad(archerIndex)}\n`;
         csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
         let totalSum = 0;
         orderPE.forEach((d) => {
@@ -776,6 +931,42 @@
         csvContent += addStatsCSV(orderPE, archerIndex, ";");
       });
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      entregarBlob(blob, filename);
+    }
+    /* Devuelve "-ACO" (u otro acrónimo) si el arquero tiene modalidad asignada, o "" si no */
+    function sufijoModalidad(archerIndex) {
+      const m = archerModalidad[archerIndex];
+      return m ? `-${m}` : "";
+    }
+
+    /* ── Entrega de archivos: descarga normal o compartir por WhatsApp/otras apps ──
+       Si el navegador soporta compartir archivos (Web Share API, la mayoría de
+       Android e iPhone modernos), se abre el panel nativo de compartir con el
+       archivo ya adjunto. Si no está disponible, se descarga como siempre. */
+    function puedeCompartirArchivos() {
+      return !!(navigator.canShare && navigator.share);
+    }
+    async function entregarBlob(blob, filename) {
+      if (modoEntrega === "compartir" && puedeCompartirArchivos()) {
+        try {
+          const file = new File([blob], filename, { type: blob.type });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: "Resultados Tiro con Arco - Gaia",
+              text: filename
+            });
+            return;
+          }
+        } catch (e) {
+          // El usuario canceló el panel de compartir, o falló: no hacemos nada más
+          if (e && e.name === "AbortError") return;
+          console.warn("[Compartir] No se pudo compartir, se descarga en su lugar:", e);
+        }
+      }
+      if (modoEntrega === "compartir") {
+        alert("Este dispositivo no permite compartir archivos directamente. Se descargará el archivo; podrás adjuntarlo a WhatsApp manualmente desde Descargas.");
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
@@ -784,13 +975,21 @@
       link.click();
       document.body.removeChild(link);
     }
+    function entregarPDF(doc, filename) {
+      if (modoEntrega === "compartir") {
+        const blob = doc.output("blob");
+        entregarBlob(blob, filename);
+      } else {
+        doc.save(filename);
+      }
+    }
     /* (B) Descarga individual de CSV */
     function downloadSingleArcherCSV_Google(archerIndex) {
       const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.csv`;
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}${sufijoModalidad(archerIndex)}.csv`;
       let csvContent = "";
       csvContent += `Archer,**${archerName}**\n`;
       csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
@@ -810,20 +1009,14 @@
       csvContent += "\n";
       csvContent += addStatsCSV(order, archerIndex, ",");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      entregarBlob(blob, filename);
     }
     function downloadSingleArcherCSV_Excel(archerIndex) {
       const dateStr = new Date().toISOString().slice(0, 10);
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.csv`;
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}${sufijoModalidad(archerIndex)}.csv`;
       let csvContent = "\ufeff";
       csvContent += `Archer;**${archerName}**\n`;
       csvContent += "Puesto;Flecha 1;Flecha 2;Suma Parcial;Suma Total\n";
@@ -843,13 +1036,7 @@
       csvContent += "\n";
       csvContent += addStatsCSV(order, archerIndex, ";");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      entregarBlob(blob, filename);
     }
 
     /* ── Estadísticas CSV ── */
@@ -1042,7 +1229,7 @@
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
       doc.setFontSize(16);
-      doc.text(`${placeStr} ${dateStr} ${patrullaStr} - ${archerName}`, 14, 20);
+      doc.text(`${placeStr} ${dateStr} ${patrullaStr} - ${archerName}${sufijoModalidad(archerIndex)}`, 14, 20);
       let order = [];
       for (let i = startDiana; i <= maxDianas; i++) order.push(i);
       for (let i = 1; i < startDiana; i++) order.push(i);
@@ -1106,8 +1293,8 @@
         }
       });
       dibujarEstadisticasPDF(doc, archerIndex, order);
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}.pdf`;
-      doc.save(filename);
+      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}${sufijoModalidad(archerIndex)}.pdf`;
+      entregarPDF(doc, filename);
     }
     function downloadPatrullaPDF() {
       const { jsPDF } = window.jspdf;
@@ -1119,7 +1306,7 @@
         if (i > 0) { doc.addPage(); }
         let archerName = participants[i] || "Unknown";
         doc.setFontSize(16);
-        doc.text(`${placeStr} ${dateStr} ${patrullaStr} - ${archerName}`, 14, 20);
+        doc.text(`${placeStr} ${dateStr} ${patrullaStr} - ${archerName}${sufijoModalidad(i)}`, 14, 20);
         let order = [];
         for (let j = startDiana; j <= maxDianas; j++) order.push(j);
         for (let j = 1; j < startDiana; j++) order.push(j);
@@ -1185,7 +1372,7 @@
         dibujarEstadisticasPDF(doc, i, order);
       }
       const filename = `${placeStr}-${dateStr}-${patrullaStr}-Patrulla.pdf`;
-      doc.save(filename);
+      entregarPDF(doc, filename);
     }
     /* (D) Modal de Descarga */
     // Para descarga individual
@@ -1199,7 +1386,8 @@
       downloadMode = "patrulla";
       document.getElementById("downloadFormatModal").style.display = "flex";
     }
-    function confirmDownloadFormat() {
+    function confirmDownloadFormat(modo) {
+      modoEntrega = modo || "descargar";
       const format = document.getElementById("downloadFormatSelect").value;
       document.getElementById("downloadFormatModal").style.display = "none";
       try {
@@ -1235,7 +1423,7 @@
       downloadCard.style.display = "block";
       buttonsDiv.innerHTML = "";
       participants.forEach((name, i) => {
-        buttonsDiv.innerHTML += `<button class="btn-primario" onclick="selectDownloadFormat(${i})">Descargar ${name}</button>`;
+        buttonsDiv.innerHTML += `<button class="btn-primario" onclick="selectDownloadFormat(${i})">Descargar ${name}${sufijoModalidad(i)}</button>`;
       });
       buttonsDiv.innerHTML += `<button class="btn-secundario" onclick="selectDownloadFormatPatrulla()">Descargar Patrulla completa</button>`;
     }
@@ -1244,6 +1432,8 @@
       document.getElementById("mainSummaryCard").style.display = "block";
     }
 
+    // Estado inicial del selector de Patrulla (por defecto 24, se ajusta al elegir lugar)
+    poblarStartDiana(24);
   </script>
 
   <!-- Registro del Service Worker (PWA offline) -->
