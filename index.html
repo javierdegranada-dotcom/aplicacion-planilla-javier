@@ -305,6 +305,37 @@
       text-align: center;
       max-width: 340px;
     }
+    /* ===============================
+       Estilos para el Modal "dónde está tu archivo"
+       =============================== */
+    #avisoDescargaModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+    #avisoDescargaContent {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: left;
+      max-width: 340px;
+    }
+    #avisoDescargaContent h3 { text-align: center; }
+    #avisoNavegador {
+      display: none;
+      background: #fff3cd;
+      color: #7a5b00;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 0.85em;
+      text-align: left;
+    }
   </style>
   <!-- Incluir jsPDF y autoTable -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -329,6 +360,7 @@
   <div class="card" id="welcomeCard" style="display:none;">
     <h1><strong>Tiro con Arco - Gaia</strong></h1>
     <p>Instala la app en tu móvil para tenerla siempre a mano, o compártela con otro arquero.</p>
+    <div id="avisoNavegador"></div>
     <button class="btn-secundario" onclick="instalarApp()">📲 Instalar la app</button>
     <br>
     <button class="btn-azulClaro" onclick="compartirApp()">🔗 Compartir con otro arquero</button>
@@ -458,6 +490,16 @@
         <li>Pulsa <strong>"Añadir"</strong>. El icono aparecerá en tu pantalla como una app normal.</li>
       </ol>
       <button class="btn-primario" onclick="cerrarIosInstallModal()">Entendido</button>
+    </div>
+  </div>
+  <!-- Modal: dónde está tu archivo tras descargarlo -->
+  <div id="avisoDescargaModal">
+    <div id="avisoDescargaContent">
+      <h3>📥 Archivo descargado</h3>
+      <p id="avisoDescargaCuerpo"></p>
+      <div style="text-align:center;">
+        <button class="btn-primario" onclick="cerrarAvisoDescargaModal()">Entendido</button>
+      </div>
     </div>
   </div>
   <!-- Modal para seleccionar el formato de descarga -->
@@ -598,6 +640,7 @@
         document.getElementById("restoreSessionCard").style.display = "flex";
       } else {
         document.getElementById("welcomeCard").style.display = "block";
+        avisarSiNavegadorProblematico();
       }
     }
     function irAStartCard() {
@@ -610,6 +653,7 @@
         // Sesión no disponible o corrupta: empezar de cero en lugar de quedarse bloqueado
         document.getElementById("restoreSessionCard").style.display = "none";
         document.getElementById("welcomeCard").style.display = "block";
+        avisarSiNavegadorProblematico();
         return;
       }
       selectedLugar = data.selectedLugar || "";
@@ -634,6 +678,7 @@
       try { localStorage.removeItem("archerySession"); } catch (e) { console.warn("[Sesión] No se pudo borrar:", e); }
       document.getElementById("restoreSessionCard").style.display = "none";
       document.getElementById("welcomeCard").style.display = "block";
+      avisarSiNavegadorProblematico();
     }
     function saveSession() {
       const data = {
@@ -946,6 +991,38 @@
     function puedeCompartirArchivos() {
       return !!(navigator.canShare && navigator.share);
     }
+
+    /* Navegadores de fabricante (MIUI, UC, Huawei, Oppo, Vivo...) suelen tener
+       un soporte flojo o inexistente de compartir archivos, aunque el sistema
+       tenga Chrome instalado. Avisamos para que abran la app en Chrome/Safari. */
+    function navegadorProblematico() {
+      return /MiuiBrowser|UCBrowser|QQBrowser|HuaweiBrowser|OppoBrowser|HeyTapBrowser|VivoBrowser|SamsungBrowser\/[1-9]\./i.test(navigator.userAgent);
+    }
+    function avisarSiNavegadorProblematico() {
+      if (navegadorProblematico()) {
+        const div = document.getElementById("avisoNavegador");
+        if (div) {
+          div.style.display = "block";
+          div.textContent = "⚠️ Parece que estás usando el navegador propio del móvil (no Chrome ni Safari). Para que descargar y compartir archivos funcione bien, abre esta página en Chrome.";
+        }
+      }
+    }
+
+    /* Aviso de "dónde está tu archivo" tras una descarga: red de seguridad
+       para cuando no se puede compartir directamente (sobre todo con CSV,
+       que no tiene visor propio en el navegador). */
+    function mostrarAvisoDescarga(filename) {
+      const cuerpo = document.getElementById("avisoDescargaCuerpo");
+      const instrucciones = esIOS()
+        ? "Ve a la app <strong>Archivos</strong> → Explorar → Descargas. También puedes deslizar hacia abajo en la pantalla de inicio y buscarlo en las descargas recientes de Safari."
+        : "Desliza hacia abajo la barra de notificaciones y toca la descarga, o abre tu app <strong>Archivos</strong> (a veces llamada \"Mis archivos\" o \"Gestor de archivos\") → carpeta <strong>Descargas</strong>.";
+      cuerpo.innerHTML = `Se ha descargado <strong>${filename}</strong>.<br><br>${instrucciones}`;
+      document.getElementById("avisoDescargaModal").style.display = "flex";
+    }
+    function cerrarAvisoDescargaModal() {
+      document.getElementById("avisoDescargaModal").style.display = "none";
+    }
+
     async function entregarBlob(blob, filename) {
       if (modoEntrega === "compartir" && puedeCompartirArchivos()) {
         try {
@@ -964,9 +1041,6 @@
           console.warn("[Compartir] No se pudo compartir, se descarga en su lugar:", e);
         }
       }
-      if (modoEntrega === "compartir") {
-        alert("Este dispositivo no permite compartir archivos directamente. Se descargará el archivo; podrás adjuntarlo a WhatsApp manualmente desde Descargas.");
-      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
@@ -974,13 +1048,29 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      mostrarAvisoDescarga(filename);
     }
     function entregarPDF(doc, filename) {
+      const blob = doc.output("blob");
       if (modoEntrega === "compartir") {
-        const blob = doc.output("blob");
         entregarBlob(blob, filename);
-      } else {
-        doc.save(filename);
+        return;
+      }
+      // Para PDF, en vez de forzar una descarga a ciegas, lo abrimos en una
+      // pestaña: el visor de PDF del navegador (Chrome/Safari) tiene su propio
+      // botón de compartir/descargar, mucho más fiable que nuestro código,
+      // y así el arquero VE el archivo en vez de que desaparezca en Descargas.
+      const url = URL.createObjectURL(blob);
+      const ventana = window.open(url, "_blank");
+      if (!ventana) {
+        // Si el navegador bloqueó la ventana emergente, recurrimos a la descarga clásica
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        mostrarAvisoDescarga(filename);
       }
     }
     /* (B) Descarga individual de CSV */
