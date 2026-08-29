@@ -948,7 +948,7 @@
       return csvContent;
     }
     function nombreBasePatrulla() {
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = fechaLocalHoy();
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       return `${placeStr}-${dateStr}-${patrullaStr}`;
@@ -987,7 +987,7 @@
       }
     }
     function downloadPatrullaCSV_Excel() {
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = fechaLocalHoy();
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
@@ -1018,6 +1018,18 @@
     function sufijoModalidad(archerIndex) {
       const m = archerModalidad[archerIndex];
       return m ? `-${m}` : "";
+    }
+    /* Fecha de HOY según la hora local del dispositivo (no UTC). Usar
+       toISOString() aquí sería un error: España va por delante de UTC, así
+       que pasada la medianoche en Greenwich (la 1 o las 2 de la madrugada en
+       España) el resultado saltaría al día siguiente aunque localmente
+       siguiera siendo el mismo día de competición. */
+    function fechaLocalHoy() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
     }
 
     /* ── Entrega de archivos: descarga normal o compartir por WhatsApp/otras apps ──
@@ -1196,7 +1208,7 @@
       return csvContent;
     }
     function nombreBaseArquero(archerIndex) {
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = fechaLocalHoy();
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
@@ -1225,7 +1237,7 @@
       }
     }
     function downloadSingleArcherCSV_Excel(archerIndex) {
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = fechaLocalHoy();
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
@@ -1436,7 +1448,7 @@
     function downloadSingleArcherPDF(archerIndex) {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = fechaLocalHoy();
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       const archerName = participants[archerIndex] || "Unknown";
@@ -1511,7 +1523,7 @@
     function downloadPatrullaPDF() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = fechaLocalHoy();
       const placeStr = selectedLugar || "SinLugar";
       const patrullaStr = "Patrulla-" + startDiana;
       for (let i = 0; i < participants.length; i++) {
