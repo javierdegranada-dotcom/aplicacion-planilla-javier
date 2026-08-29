@@ -966,6 +966,15 @@
       if (dianasCompletadas <= ultimoCheckpointEnviado) return;
       if (dianasCompletadas % INTERVALO_CHECKPOINT_CLASIFICACION !== 0) return;
       if (dianasCompletadas >= maxDianas) return; // el último tramo lo cubren los resultados finales de siempre
+      // Si todavía no hay una URL de Apps Script configurada, no marcamos
+      // este checkpoint como enviado: así, en cuanto se configure la URL,
+      // el siguiente checkpoint (a los 6 puestos siguientes) puede
+      // dispararse con normalidad en vez de quedar bloqueado para siempre
+      // por un intento que nunca llegó a salir.
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("PON_AQUI")) {
+        console.warn("[Clasificación en directo] APPS_SCRIPT_URL no configurada, checkpoint no marcado como enviado.");
+        return;
+      }
       ultimoCheckpointEnviado = dianasCompletadas;
       saveSession();
       enviarParcialClasificacion(dianasCompletadas);
