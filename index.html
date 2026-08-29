@@ -366,6 +366,8 @@
     <button class="btn-azulClaro" onclick="compartirApp()">🔗 Compartir con otro arquero</button>
     <br>
     <button class="btn-primario" onclick="irAStartCard()">Comenzar</button>
+    <br>
+    <button class="btn-peligro" onclick="diagnosticoCompartir()" style="margin-top:10px; font-size:0.8em;">🔍 Comprobar compatibilidad de "Compartir"</button>
   </div>
   <!-- Config -->
   <div class="card" id="startCard" style="display:none;">
@@ -1040,6 +1042,22 @@
           div.textContent = "⚠️ Parece que estás usando el navegador propio del móvil (no Chrome ni Safari). Para que descargar y compartir archivos funcione bien, abre esta página en Chrome.";
         }
       }
+    }
+
+    /* Diagnóstico visible: en vez de seguir adivinando por qué falla
+       compartir en un dispositivo concreto, esto muestra exactamente qué
+       admite el navegador que se está usando ahora mismo. */
+    function diagnosticoCompartir() {
+      const lineas = [];
+      lineas.push("navigator.share (compartir texto o archivos): " + (navigator.share ? "SÍ disponible" : "NO disponible"));
+      lineas.push("navigator.canShare (comprobar si algo es compartible): " + (navigator.canShare ? "SÍ disponible" : "NO disponible"));
+      lineas.push("App instalada / modo standalone: " + (appYaInstalada() ? "SÍ" : "NO, se está viendo en el navegador"));
+      lineas.push("¿Es iPhone/iPad?: " + (esIOS() ? "SÍ" : "NO"));
+      lineas.push("¿Navegador de fabricante detectado (Mi Browser, etc.)?: " + (navegadorProblematico() ? "SÍ" : "NO"));
+      lineas.push("");
+      lineas.push("Identificación completa del navegador:");
+      lineas.push(navigator.userAgent);
+      alert(lineas.join("\n"));
     }
 
     /* Aviso de "dónde está tu archivo" tras una descarga: red de seguridad
