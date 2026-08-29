@@ -507,9 +507,10 @@
     <div id="downloadFormatContent">
       <h3>Selecciona el formato de descarga</h3>
       <select id="downloadFormatSelect">
+        <option value="txt">TXT (usar para competición)</option>
+        <option value="pdf">PDF</option>
         <option value="csv_google">CSV (Google Sheets)</option>
         <option value="csv_excel">CSV (Excel)</option>
-        <option value="pdf">PDF</option>
       </select>
       <br>
       <button class="btn-primario" onclick="confirmDownloadFormat('descargar')">Descargar</button>
@@ -921,11 +922,7 @@
       });
     }
     /* (B) Descarga de CSV para Patrulla */
-    function downloadPatrullaCSV_Google() {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const placeStr = selectedLugar || "SinLugar";
-      const patrullaStr = "Patrulla-" + startDiana;
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}.csv`;
+    function construirContenidoPatrulla() {
       let csvContent = "";
       let orderP = [];
       for (let i = startDiana; i <= maxDianas; i++) orderP.push(i);
@@ -946,8 +943,24 @@
         csvContent += "\n";
         csvContent += addStatsCSV(orderP, archerIndex, ",");
       });
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-      entregarBlob(blob, filename);
+      return csvContent;
+    }
+    function nombreBasePatrulla() {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      return `${placeStr}-${dateStr}-${patrullaStr}`;
+    }
+    function downloadPatrullaCSV_Google() {
+      const csvContent = construirContenidoPatrulla();
+      entregarTexto(csvContent, `${nombreBasePatrulla()}.csv`, 'text/csv;charset=utf-8');
+    }
+    function downloadPatrullaTXT() {
+      // Mismo contenido que el CSV, pero como .txt: se comparte sin problemas
+      // por WhatsApp en cualquier móvil, y el Clasificador de Resultados
+      // también sabe leer archivos .txt igual que los CSV.
+      const csvContent = construirContenidoPatrulla();
+      entregarTexto(csvContent, `${nombreBasePatrulla()}.txt`, 'text/plain;charset=utf-8');
     }
     function downloadPatrullaCSV_Excel() {
       const dateStr = new Date().toISOString().slice(0, 10);
@@ -975,8 +988,7 @@
         csvContent += "\n";
         csvContent += addStatsCSV(orderPE, archerIndex, ";");
       });
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-      entregarBlob(blob, filename);
+      entregarTexto(csvContent, filename, 'text/csv;charset=utf-8');
     }
     /* Devuelve "-ACO" (u otro acrónimo) si el arquero tiene modalidad asignada, o "" si no */
     function sufijoModalidad(archerIndex) {
@@ -1023,30 +1035,46 @@
       document.getElementById("avisoDescargaModal").style.display = "none";
     }
 
+    /* Envoltorio simple: construye el blob de texto (CSV) y lo entrega. */
+    async function entregarTexto(texto, filename, mimeType) {
+      const blob = new Blob([texto], { type: mimeType });
+      await entregarBlob(blob, filename);
+    }
+
+    /* ── Entrega de archivos con varios intentos de compartir ──
+       Android/iOS tienen una lista interna de qué tipos de archivo se pueden
+       compartir con el panel nativo; el PDF suele estar en esa lista, pero el
+       CSV no siempre. Por eso probamos varias variantes antes de rendirnos:
+       1) el tipo MIME tal cual, 2) el tipo MIME "pelado" (sin charset),
+       3) si es texto, disfrazado de .txt/text/plain, que casi siempre se
+       acepta. Si ninguna funciona, se descarga como archivo normal. */
     async function entregarBlob(blob, filename) {
       if (modoEntrega === "compartir" && puedeCompartirArchivos()) {
-        try {
-          let file = new File([blob], filename, { type: blob.type });
-          if (!navigator.canShare({ files: [file] })) {
-            // Algunos navegadores solo reconocen el tipo MIME "pelado" (sin
-            // parámetros como charset); lo probamos como segundo intento.
-            const tipoBase = blob.type.split(";")[0].trim();
-            if (tipoBase && tipoBase !== blob.type) {
-              file = new File([blob], filename, { type: tipoBase });
+        const tipoBase = blob.type.split(";")[0].trim();
+        const intentos = [{ filename, type: blob.type }];
+        if (tipoBase && tipoBase !== blob.type) {
+          intentos.push({ filename, type: tipoBase });
+        }
+        if (tipoBase.startsWith("text/") && tipoBase !== "text/plain") {
+          const filenameTxt = filename.replace(/\.[^.]+$/, "") + ".txt";
+          intentos.push({ filename: filenameTxt, type: "text/plain" });
+        }
+        for (const intento of intentos) {
+          try {
+            const file = new File([blob], intento.filename, { type: intento.type });
+            if (navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                files: [file],
+                title: "Resultados Tiro con Arco - Gaia",
+                text: intento.filename
+              });
+              return;
             }
+          } catch (e) {
+            // El usuario canceló el panel de compartir: no seguimos insistiendo
+            if (e && e.name === "AbortError") return;
+            console.warn("[Compartir] Intento fallido con", intento.filename, e);
           }
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: "Resultados Tiro con Arco - Gaia",
-              text: filename
-            });
-            return;
-          }
-        } catch (e) {
-          // El usuario canceló el panel de compartir, o falló: no hacemos nada más
-          if (e && e.name === "AbortError") return;
-          console.warn("[Compartir] No se pudo compartir, se descarga en su lugar:", e);
         }
       }
       const url = URL.createObjectURL(blob);
@@ -1082,12 +1110,8 @@
       }
     }
     /* (B) Descarga individual de CSV */
-    function downloadSingleArcherCSV_Google(archerIndex) {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const placeStr = selectedLugar || "SinLugar";
-      const patrullaStr = "Patrulla-" + startDiana;
+    function construirContenidoArquero(archerIndex) {
       const archerName = participants[archerIndex] || "Unknown";
-      const filename = `${placeStr}-${dateStr}-${patrullaStr}-${archerName}${sufijoModalidad(archerIndex)}.csv`;
       let csvContent = "";
       csvContent += `Archer,**${archerName}**\n`;
       csvContent += "Puesto,Flecha 1,Flecha 2,Suma Parcial,Suma Total\n";
@@ -1106,8 +1130,22 @@
       });
       csvContent += "\n";
       csvContent += addStatsCSV(order, archerIndex, ",");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-      entregarBlob(blob, filename);
+      return csvContent;
+    }
+    function nombreBaseArquero(archerIndex) {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const placeStr = selectedLugar || "SinLugar";
+      const patrullaStr = "Patrulla-" + startDiana;
+      const archerName = participants[archerIndex] || "Unknown";
+      return `${placeStr}-${dateStr}-${patrullaStr}-${archerName}${sufijoModalidad(archerIndex)}`;
+    }
+    function downloadSingleArcherCSV_Google(archerIndex) {
+      const csvContent = construirContenidoArquero(archerIndex);
+      entregarTexto(csvContent, `${nombreBaseArquero(archerIndex)}.csv`, 'text/csv;charset=utf-8');
+    }
+    function downloadSingleArcherTXT(archerIndex) {
+      const csvContent = construirContenidoArquero(archerIndex);
+      entregarTexto(csvContent, `${nombreBaseArquero(archerIndex)}.txt`, 'text/plain;charset=utf-8');
     }
     function downloadSingleArcherCSV_Excel(archerIndex) {
       const dateStr = new Date().toISOString().slice(0, 10);
@@ -1133,8 +1171,7 @@
       });
       csvContent += "\n";
       csvContent += addStatsCSV(order, archerIndex, ";");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-      entregarBlob(blob, filename);
+      entregarTexto(csvContent, filename, 'text/csv;charset=utf-8');
     }
 
     /* ── Estadísticas CSV ── */
@@ -1494,6 +1531,8 @@
             downloadSingleArcherCSV_Google(currentDownloadArcherIndex);
           } else if (format === "csv_excel") {
             downloadSingleArcherCSV_Excel(currentDownloadArcherIndex);
+          } else if (format === "txt") {
+            downloadSingleArcherTXT(currentDownloadArcherIndex);
           } else if (format === "pdf") {
             downloadSingleArcherPDF(currentDownloadArcherIndex);
           }
@@ -1502,6 +1541,8 @@
             downloadPatrullaCSV_Google();
           } else if (format === "csv_excel") {
             downloadPatrullaCSV_Excel();
+          } else if (format === "txt") {
+            downloadPatrullaTXT();
           } else if (format === "pdf") {
             downloadPatrullaPDF();
           }
