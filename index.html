@@ -946,7 +946,7 @@
         csvContent += "\n";
         csvContent += addStatsCSV(orderP, archerIndex, ",");
       });
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
       entregarBlob(blob, filename);
     }
     function downloadPatrullaCSV_Excel() {
@@ -975,7 +975,7 @@
         csvContent += "\n";
         csvContent += addStatsCSV(orderPE, archerIndex, ";");
       });
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
       entregarBlob(blob, filename);
     }
     /* Devuelve "-ACO" (u otro acrónimo) si el arquero tiene modalidad asignada, o "" si no */
@@ -1026,7 +1026,15 @@
     async function entregarBlob(blob, filename) {
       if (modoEntrega === "compartir" && puedeCompartirArchivos()) {
         try {
-          const file = new File([blob], filename, { type: blob.type });
+          let file = new File([blob], filename, { type: blob.type });
+          if (!navigator.canShare({ files: [file] })) {
+            // Algunos navegadores solo reconocen el tipo MIME "pelado" (sin
+            // parámetros como charset); lo probamos como segundo intento.
+            const tipoBase = blob.type.split(";")[0].trim();
+            if (tipoBase && tipoBase !== blob.type) {
+              file = new File([blob], filename, { type: tipoBase });
+            }
+          }
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({
               files: [file],
@@ -1098,7 +1106,7 @@
       });
       csvContent += "\n";
       csvContent += addStatsCSV(order, archerIndex, ",");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
       entregarBlob(blob, filename);
     }
     function downloadSingleArcherCSV_Excel(archerIndex) {
@@ -1125,7 +1133,7 @@
       });
       csvContent += "\n";
       csvContent += addStatsCSV(order, archerIndex, ";");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
       entregarBlob(blob, filename);
     }
 
