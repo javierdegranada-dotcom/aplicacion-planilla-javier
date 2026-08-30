@@ -610,7 +610,7 @@
     // Mientras diga "PON_AQUI...", la app funciona igual que siempre,
     // simplemente no intenta enviar ni consultar la clasificación en directo.
     // ────────────────────────────────────────────────────────────
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwdoCQlCX50OElo7fykXpVFK-B-7yCOBT1VUZMmWlZoqjQSFpJd8nDVoWsForhiFVhH/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw-naeiVRs1mxs-o-2ubMK7r5xbB_HPxQDtbdGblGIAMGw63ssMxsxmbiryDpCSfaIX/exec";
 
     // Mismo orden y mismos nombres de modalidad que en el selector de
     // arqueros, para que la clasificación en directo agrupe las categorías
@@ -850,7 +850,7 @@
         document.getElementById("participants").style.display = "none";
       }
     }
-    function startRecorrido() {
+    async function startRecorrido() {
       const lugarValue = document.getElementById("selectLugar").value;
       if (!lugarValue) { alert("Por favor, selecciona un lugar."); return; }
       if (lugarValue === "Otro") {
@@ -872,20 +872,35 @@
       // para este nuevo recorrido.
       dianasCompletadas = 0;
       ultimoCheckpointEnviado = 0;
-      const numArqueros = parseInt(document.getElementById("numArqueros").value);
-      if (!numArqueros || numArqueros < 1 || numArqueros > 6) { alert("Por favor, selecciona un número válido de arqueros (1 a 6)."); return; }
-      participants = [];
-      archerModalidad = [];
-      for (let i = 0; i < numArqueros; i++) {
-        const name = document.getElementById(`archer${i}`).value.trim();
-        if (!name) { alert("Completa todos los nombres de los arqueros."); return; }
-        participants.push(name);
-        const modalidadSelect = document.getElementById(`modalidad${i}`);
-        archerModalidad.push(modalidadSelect ? modalidadSelect.value : "");
-      }
+
       const selDiana = parseInt(document.getElementById("startDiana").value);
       if (!selDiana || selDiana < 1 || selDiana > maxDianas) { alert(`Por favor, selecciona un puesto válido (1-${maxDianas}).`); return; }
       startDiana = selDiana;
+
+      // Si otro móvil ya ha registrado esta misma patrulla (mismo lugar +
+      // fecha + patrulla), usamos SUS nombres y modalidades en vez de lo
+      // que se haya escrito aquí, para que dos o tres móviles llevando la
+      // misma patrulla queden siempre exactamente iguales, sin que nadie
+      // tenga que copiarlos a mano ni arriesgarse a escribirlos distinto.
+      const rosterExistente = await comprobarRosterExistente(selectedLugar, startDiana);
+      if (rosterExistente) {
+        participants = rosterExistente.map(a => a.nombre);
+        archerModalidad = rosterExistente.map(a => a.modalidad || "");
+        alert("Se han cargado los nombres ya registrados por otro móvil para esta patrulla, en vez de los que hubieras escrito aquí.");
+      } else {
+        const numArqueros = parseInt(document.getElementById("numArqueros").value);
+        if (!numArqueros || numArqueros < 1 || numArqueros > 6) { alert("Por favor, selecciona un número válido de arqueros (1 a 6)."); return; }
+        participants = [];
+        archerModalidad = [];
+        for (let i = 0; i < numArqueros; i++) {
+          const name = document.getElementById(`archer${i}`).value.trim();
+          if (!name) { alert("Completa todos los nombres de los arqueros."); return; }
+          participants.push(name);
+          const modalidadSelect = document.getElementById(`modalidad${i}`);
+          archerModalidad.push(modalidadSelect ? modalidadSelect.value : "");
+        }
+      }
+
       currentDiana = startDiana;
       currentArcherIndex = 0;
       document.getElementById("currentDiana").innerText = currentDiana;
@@ -895,6 +910,7 @@
       document.getElementById("mainSummaryCard").style.display = "block";
       saveSession();
       updateSummary();
+      registrarRosterPatrulla(); // fire-and-forget: publica (o confirma) el roster para otros móviles
     }
     /* Puntuaciones */
     function setScore(flecha, score) {
@@ -958,6 +974,55 @@
        ese momento, Apps Script no configurado, etc.) no afecta en nada al
        apuntado ni a los resultados finales, que siguen su camino de
        siempre por descarga/WhatsApp. */
+
+    /* Comprueba si ya hay un roster (nombres+modalidades) registrado en el
+       servidor para este lugar+patrulla+hoy — lo usa startRecorrido() para
+       que un segundo o tercer móvil adopten automáticamente los mismos
+       nombres que el primero, en vez de que alguien tenga que copiarlos a
+       mano. Si no hay conexión o no hay nada registrado, devuelve null y
+       el flujo normal de escribir los nombres a mano sigue funcionando
+       exactamente igual que siempre. */
+    async function comprobarRosterExistente(lugar, patrulla) {
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("PON_AQUI")) return null;
+      try {
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const url = `${APPS_SCRIPT_URL}?roster=1&lugar=${encodeURIComponent(lugar)}&fecha=${encodeURIComponent(dateStr)}&patrulla=${encodeURIComponent(patrulla)}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        return (data.ok && data.arqueros && data.arqueros.length > 0) ? data.arqueros : null;
+      } catch (e) {
+        console.warn("[Clasificación en directo] No se pudo comprobar si había roster registrado:", e);
+        return null;
+      }
+    }
+
+    /* Publica (o confirma, si ya lo había hecho otro móvil) los nombres y
+       modalidades de esta patrulla, con 0 puntos — es solo para que otros
+       móviles puedan copiarlos, no aparece en la clasificación en directo
+       (el servidor filtra las filas con 0 tiradas). No bloquea nada si
+       falla: es un añadido informativo, igual que los checkpoints. */
+    async function registrarRosterPatrulla() {
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("PON_AQUI")) return;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const payload = {
+        lugar: selectedLugar,
+        fecha: dateStr,
+        patrulla: startDiana,
+        puesto: 0,
+        arqueros: participants.map((nombre, i) => ({
+          nombre,
+          modalidad: archerModalidad[i] || "",
+          puntos: 0
+        }))
+      };
+      try {
+        const url = `${APPS_SCRIPT_URL}?datos=${encodeURIComponent(JSON.stringify(payload))}`;
+        await fetch(url);
+      } catch (e) {
+        console.warn("[Clasificación en directo] No se pudo registrar la patrulla (no afecta al apuntado):", e);
+      }
+    }
 
     function comprobarEnvioCheckpointClasificacion() {
       // Cada uno puede empezar en un puesto distinto: por eso el disparador
