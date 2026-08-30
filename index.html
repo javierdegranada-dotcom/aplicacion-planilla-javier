@@ -433,6 +433,16 @@
   <!-- Config -->
   <div class="card" id="startCard" style="display:none;">
     <h1><strong>Inicio del Recorrido</strong></h1>
+    <p>¿Es una competición?</p>
+    <select id="selectCompeticion">
+      <option value="no">No, solo entrenamos</option>
+      <option value="si">Sí, varios móviles llevan la misma patrulla</option>
+    </select>
+    <p style="font-size:0.8em; color:#666; margin-top:-5px;">
+      Marca "Sí" solo si esto es una competición real y dos o tres móviles van a llevar la misma patrulla a la vez —
+      así se adoptan los nombres entre ellos y se comparte la clasificación en directo. En un entrenamiento normal,
+      deja "No": así una tirada de la mañana nunca se mezcla con otra de la tarde en el mismo sitio.
+    </p>
     <p>Selecciona el lugar de la tirada:</p>
     <select id="selectLugar" onchange="checkLugar()">
       <option value="">Seleccionar...</option>
@@ -503,7 +513,7 @@
     <h2><strong>Resumen</strong></h2>
     <div id="resume-total"></div>
     <div id="resume-buttons"></div>
-    <button class="btn-azulClaro" onclick="verClasificacionMitad()">Ver clasificación en directo</button>
+    <button class="btn-azulClaro" id="btnClasificacionDirecto" onclick="verClasificacionMitad()">Ver clasificación en directo</button>
     <button class="btn-secundario" onclick="showDownloadCard()">Descargas</button>
   </div>
   <!-- Clasificación en directo (checkpoints cada 6 tiradas) -->
@@ -642,6 +652,11 @@
     const INTERVALO_CHECKPOINT_CLASIFICACION = 6;
     let dianasCompletadas = 0;
     let ultimoCheckpointEnviado = 0;
+    // Si no es una competición (entrenamiento normal), esta sesión no
+    // envía ni consulta nada de la clasificación en directo — así una
+    // tirada de la mañana nunca se mezcla con otra de la tarde en el
+    // mismo sitio y con el mismo número de patrulla.
+    let esCompeticion = false;
     let editingDiana = null;
     let editingArcherIndex = null;
     let editingFlecha = null;
@@ -772,6 +787,7 @@
       scores = data.scores || Array(maxDianas).fill(null).map(() => []);
       dianasCompletadas = data.dianasCompletadas || 0;
       ultimoCheckpointEnviado = data.ultimoCheckpointEnviado || 0;
+      esCompeticion = data.esCompeticion || false;
       document.getElementById("restoreSessionCard").style.display = "none";
       document.getElementById("dianaCard").style.display = "block";
       document.getElementById("currentDiana").innerText = currentDiana;
@@ -779,6 +795,7 @@
         document.getElementById("currentArcher").innerText = participants[currentArcherIndex];
       }
       document.getElementById("mainSummaryCard").style.display = "block";
+      document.getElementById("btnClasificacionDirecto").style.display = esCompeticion ? "inline-block" : "none";
       document.getElementById("startCard").style.display = "none";
       updateSummary();
     }
@@ -799,7 +816,8 @@
         maxDianas,
         scores,
         dianasCompletadas,
-        ultimoCheckpointEnviado
+        ultimoCheckpointEnviado,
+        esCompeticion
       };
       try {
         localStorage.setItem("archerySession", JSON.stringify(data));
@@ -851,6 +869,7 @@
       }
     }
     async function startRecorrido() {
+      esCompeticion = (document.getElementById("selectCompeticion").value === "si");
       const lugarValue = document.getElementById("selectLugar").value;
       if (!lugarValue) { alert("Por favor, selecciona un lugar."); return; }
       if (lugarValue === "Otro") {
@@ -882,7 +901,9 @@
       // que se haya escrito aquí, para que dos o tres móviles llevando la
       // misma patrulla queden siempre exactamente iguales, sin que nadie
       // tenga que copiarlos a mano ni arriesgarse a escribirlos distinto.
-      const rosterExistente = await comprobarRosterExistente(selectedLugar, startDiana);
+      const rosterExistente = esCompeticion
+        ? await comprobarRosterExistente(selectedLugar, startDiana)
+        : null;
       if (rosterExistente) {
         participants = rosterExistente.map(a => a.nombre);
         archerModalidad = rosterExistente.map(a => a.modalidad || "");
@@ -908,9 +929,12 @@
       document.getElementById("startCard").style.display = "none";
       document.getElementById("dianaCard").style.display = "block";
       document.getElementById("mainSummaryCard").style.display = "block";
+      document.getElementById("btnClasificacionDirecto").style.display = esCompeticion ? "inline-block" : "none";
       saveSession();
       updateSummary();
-      registrarRosterPatrulla(); // fire-and-forget: publica (o confirma) el roster para otros móviles
+      if (esCompeticion) {
+        registrarRosterPatrulla(); // fire-and-forget: publica (o confirma) el roster para otros móviles
+      }
     }
     /* Puntuaciones */
     function setScore(flecha, score) {
@@ -1025,6 +1049,11 @@
     }
 
     function comprobarEnvioCheckpointClasificacion() {
+      // Si no es una competición, esta sesión no participa en absoluto de
+      // la clasificación en directo (ver el interruptor en la pantalla de
+      // inicio) — así una tirada de entrenamiento nunca se mezcla con una
+      // competición real que use el mismo lugar/patrulla el mismo día.
+      if (!esCompeticion) return;
       // Cada uno puede empezar en un puesto distinto: por eso el disparador
       // es "tiradas completadas por la patrulla" (dianasCompletadas), no el
       // número de diana en sí, que varía según dónde empezara cada una.
